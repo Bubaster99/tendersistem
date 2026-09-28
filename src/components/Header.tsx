@@ -51,8 +51,8 @@ export function Header({ companyName }: { companyName: string }) {
         </div>
       </div>
 
-      {/* На телефоне и планшете — меню отдельной строкой с прокруткой */}
-      <nav className="flex gap-1 overflow-x-auto border-t border-line px-3 py-2 lg:hidden">
+      {/* На телефоне и планшете — меню отдельной строкой под логотипом */}
+      <nav className="flex flex-wrap gap-1 border-t border-line px-3 py-2 lg:hidden">
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={link(pathname.startsWith(n.href))}>
             {n.label}
