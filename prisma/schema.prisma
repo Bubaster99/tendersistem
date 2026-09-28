@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CompanyStatus {
+  new
+  checked
+  blocked
+}
+
+enum UserRole {
+  contractor
+  buyer
+  admin
+}
+
+// Подрядчик. Реквизиты подтягиваются из DaData по ИНН.
+model Company {
+  id         String        @id @default(cuid())
+  inn        String        @unique
+  kpp        String?
+  ogrn       String?
+  name       String
+  address    String?
+  city       String?
+  workTypes  String[]      @default([])
+  experience String?
+  status     CompanyStatus @default(new)
+  rating     Int?
+  createdAt  DateTime      @default(now())
+  users      User[]
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  role           UserRole  @default(contractor)
+  companyId      String?
+  company        Company?  @relation(fields: [companyId], references: [id])
+  name           String?
+  phone          String?
+  telegramChatId String?
+  consentPdAt    DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+// Одноразовый код входа: храним только хэш, живёт 10 минут, максимум 5 попыток.
+model LoginCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
