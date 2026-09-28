@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Цвета и шрифты — раздел 10 SPEC.md */
+@theme {
+  --color-bg: #F3F1EC;
+  --color-card: #FFFFFF;
+  --color-line: #E2DED6;
+  --color-ink: #1A1C1E;
+  --color-muted: #5B5F63;
+  --color-accent: #A63B0C;
+  --color-accent-soft: #F6E6DC;
+  --color-dark: #1F2124;
+
+  --color-open: #1F6B45;
+  --color-open-bg: #E3F0E8;
+  --color-soon: #264F7A;
+  --color-soon-bg: #E3ECF5;
+  --color-closed: #5B5F63;
+  --color-closed-bg: #ECEAE6;
+
+  --font-sans: "Onest Variable", system-ui, sans-serif;
+  --font-display: "Unbounded", "Onest Variable", sans-serif;
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-text-size-adjust: 100%;
+}
