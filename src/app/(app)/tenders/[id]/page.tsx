@@ -52,7 +52,7 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start">
         <div className="min-w-0 space-y-6">
-          <dl className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {facts.map(([k, v]) => (
               <div key={k} className="rounded-2xl border border-line bg-card px-4 py-3">
                 <dt className="text-xs text-muted">{k}</dt>
