@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { Bell, LogOut, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, LogOut, Settings, X } from "lucide-react";
 import { logout } from "@/app/(app)/actions";
 import { Logo } from "./Logo";
+import { OPEN_SUBSCRIPTION_EVENT } from "./SubscribeBanner";
 
 const NAV = [
   { href: "/objects", label: "Объекты" },
@@ -14,9 +15,16 @@ const NAV = [
   { href: "/contacts", label: "Контакты" },
 ];
 
-export function Header({ companyName }: { companyName: string }) {
+export function Header({ companyName, isStaff = false }: { companyName: string; isStaff?: boolean }) {
   const pathname = usePathname();
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+
+  // Баннер «Не пропускайте новые тендеры» открывает эту же панель.
+  useEffect(() => {
+    const open = () => setSubscriptionOpen(true);
+    window.addEventListener(OPEN_SUBSCRIPTION_EVENT, open);
+    return () => window.removeEventListener(OPEN_SUBSCRIPTION_EVENT, open);
+  }, []);
 
   const link = (active: boolean) =>
     `shrink-0 rounded-[10px] px-3 py-2 text-[15px] transition ${
@@ -39,6 +47,12 @@ export function Header({ companyName }: { companyName: string }) {
           </button>
         </nav>
         <div className="flex min-w-0 items-center gap-3">
+          {isStaff && (
+            <Link href="/admin" className="flex h-10 items-center gap-1.5 rounded-[10px] px-2 text-sm text-accent hover:bg-bg" title="Админка">
+              <Settings size={18} strokeWidth={1.75} />
+              <span className="hidden sm:inline">Админка</span>
+            </Link>
+          )}
           <span className="hidden max-w-[220px] truncate text-sm text-muted sm:block" title={companyName}>
             {companyName}
           </span>

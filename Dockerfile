@@ -8,4 +8,6 @@ COPY prisma ./prisma
 RUN npm ci
 COPY . .
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run dev -- -H 0.0.0.0"]
+# При старте: доустановить новые библиотеки (если package.json менялся), обновить базу,
+# засеять справочники и тестовые данные (повторно ничего не дублируется), запустить сайт.
+CMD ["sh", "-c", "npm install --no-audit --no-fund && npx prisma migrate deploy && npx prisma db seed && npm run dev -- -H 0.0.0.0"]

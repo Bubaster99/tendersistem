@@ -34,6 +34,7 @@ model Company {
   rating     Int?
   createdAt  DateTime      @default(now())
   users      User[]
+  downloads  DocumentDownload[]
 }
 
 model User {
@@ -47,6 +48,7 @@ model User {
   telegramChatId String?
   consentPdAt    DateTime?
   createdAt      DateTime  @default(now())
+  tenders        Tender[]
 }
 
 // Одноразовый код входа: храним только хэш, живёт 10 минут, максимум 5 попыток.
@@ -59,4 +61,112 @@ model LoginCode {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+enum TenderStatus {
+  planned
+  open
+  closed
+  rebid
+  awarded
+  cancelled
+}
+
+enum DocumentKind {
+  bom_template
+  tz
+  contract
+  drawings
+  other
+}
+
+// Объект (ЖК).
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  stage       String?
+  finishDate  String? // текстом, напр. «IV кв. 2027»
+  size        String? // этажность / секции
+  coverImage  String? // ключ файла в хранилище
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  tenders     Tender[]
+}
+
+// Справочник видов работ.
+model WorkType {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  responsibleContactId String?
+  responsibleContact   Contact? @relation(fields: [responsibleContactId], references: [id], onDelete: SetNull)
+  tenders              Tender[]
+}
+
+// Снабженцы на странице «Контакты».
+model Contact {
+  id        String     @id @default(cuid())
+  name      String
+  role      String?
+  scope     String?
+  phone     String?
+  email     String?
+  telegram  String?
+  photo     String? // ключ файла в хранилище
+  sortOrder Int        @default(0)
+  workTypes WorkType[]
+  tenders   Tender[]
+}
+
+// Тендер. publishedAt = null — черновик, подрядчики его не видят.
+model Tender {
+  id               String             @id @default(cuid())
+  projectId        String
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  workTypeId       String
+  workType         WorkType           @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
+  title            String
+  scope            String?
+  status           TenderStatus       @default(planned)
+  plannedStart     String? // текстом, для «Скоро»: «декабрь 2026»
+  deadlineAt       DateTime?
+  workStart        String?
+  paymentTerms     String?
+  retentionPercent Decimal?           @db.Decimal(5, 2)
+  contactId        String?
+  contact          Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdById      String?
+  createdBy        User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  publishedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  documents        TenderDocument[]
+  downloads        DocumentDownload[]
+
+  @@index([projectId])
+}
+
+model TenderDocument {
+  id         String       @id @default(cuid())
+  tenderId   String
+  tender     Tender       @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  kind       DocumentKind
+  fileKey    String
+  fileName   String
+  size       Int
+  uploadedAt DateTime     @default(now())
+
+  @@index([tenderId])
+}
+
+// Кто из подрядчиков скачивал документацию тендера (для счётчика и напоминаний).
+model DocumentDownload {
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenderId  String
+  tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  firstAt   DateTime @default(now())
+  lastAt    DateTime @default(now())
+
+  @@id([companyId, tenderId])
 }

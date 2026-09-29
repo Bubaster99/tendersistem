@@ -27,6 +27,8 @@ services:
     environment:
       DATABASE_URL: postgresql://tender:tender@db:5432/tender?schema=public
       AUTH_SECRET: ${AUTH_SECRET:-dev-only-secret-change-me-in-env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-aiag22msk@gmail.com}
+      UPLOAD_DIR: /app/uploads
       NODE_ENV: development
       TZ: Europe/Moscow
       WATCHPACK_POLLING: "true"
@@ -36,6 +38,9 @@ services:
       - .:/app
       - /app/node_modules
       - /app/.next
+      # Загруженные файлы (документы тендеров, картинки) — отдельный том на сервере.
+      - uploads:/app/uploads
 
 volumes:
   pgdata:
+  uploads:

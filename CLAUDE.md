@@ -28,8 +28,11 @@
 - **Первый раз:** `cp .env.example .env` (при желании впишите ключ DaData и email поддержки). Без `.env` проект тоже запустится — с тестовыми данными.
 - **Запустить:** `docker compose up --build` → открыть http://localhost:3000. Первый запуск — несколько минут.
 - **Код входа:** в режиме разработки письма не отправляются — код печатается в окне, где запущен проект (строка «Код входа: 123456»). Если запустили в фоне (`-d`): `docker compose logs -f app`.
+- **Админка (снабжение):** http://localhost:3000/admin/login — вход по email + код. Первый админ (`ADMIN_EMAIL`, по умолчанию aiag22msk@gmail.com) создаётся сам при запуске.
+- **Добавить админа:** `docker compose exec app npm run create-admin -- name@company.ru`.
+- **Тестовые данные** (3 объекта, 10 тендеров, 5 контактов, образцы документов) создаются сами при первом запуске на пустой базе.
 - **Остановить:** `Ctrl+C` в окне проекта или `docker compose down`.
-- **Стереть базу и начать с нуля:** `docker compose down -v`.
+- **Стереть базу и файлы, начать с нуля:** `docker compose down -v`.
 - **Тесты:** `docker compose exec app npm test` (или `npm test`, если Node.js установлен на компьютере).
 - **Проверка типов:** `docker compose exec app npm run lint`.
 - **Новая миграция базы (для Claude):** поменять `prisma/schema.prisma`, затем `docker compose exec app npx prisma migrate dev --name <название>`.
