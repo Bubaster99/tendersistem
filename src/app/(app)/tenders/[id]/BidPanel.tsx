@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, CheckCircle2, Download, FileSpreadsheet, Lock } from "lucide-react";
+import { CalendarClock, CheckCircle2, Download, FileSpreadsheet, Lock, Paperclip } from "lucide-react";
 import { ActionForm, Field } from "@/components/ActionForm";
 import { btnPrimary, btnSecondary, inputCls, textareaCls } from "@/components/ui";
 import { submitBidAction } from "./actions";
@@ -38,6 +38,7 @@ export function BidPanel({
 }) {
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   if (bid && !replacing) {
     return (
@@ -101,25 +102,43 @@ export function BidPanel({
         resetOnSuccess
         onSuccess={(m) => {
           setNotice(m ?? null);
+          setFileName(null);
           setReplacing(false);
         }}
       >
-        <Field label="Файл КП (.xlsx, до 20 МБ) *">
-          <input
-            name="file"
-            type="file"
-            required
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="block w-full py-2 text-sm"
-            onChange={(e) => {
-              const f = e.currentTarget.files?.[0];
-              if (f && f.size > MAX_BYTES) {
-                alert("Файл больше 20 МБ. Уменьшите его и загрузите снова.");
-                e.currentTarget.value = "";
-              }
-            }}
-          />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-sm text-muted">Файл КП (.xlsx, до 20 МБ) *</span>
+          <label className={`${btnPrimary} h-12 w-full cursor-pointer has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/40`}>
+            <Paperclip size={18} strokeWidth={1.75} /> {fileName ? "Выбрать другой файл" : "Прикрепить файл КП"}
+            <input
+              name="file"
+              type="file"
+              required
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.currentTarget.files?.[0];
+                if (f && f.size > MAX_BYTES) {
+                  alert("Файл больше 20 МБ. Уменьшите его и загрузите снова.");
+                  e.currentTarget.value = "";
+                  setFileName(null);
+                  return;
+                }
+                setFileName(f?.name ?? null);
+              }}
+            />
+          </label>
+          <p className={`mt-1.5 flex items-center gap-1.5 text-sm ${fileName ? "text-ink" : "text-muted"}`}>
+            {fileName ? (
+              <>
+                <FileSpreadsheet size={16} strokeWidth={1.75} className="shrink-0 text-muted" />
+                <span className="break-all">{fileName}</span>
+              </>
+            ) : (
+              "Файл не выбран"
+            )}
+          </p>
+        </div>
         <Field label="Итого с НДС, ₽ *">
           <input name="totalWithVat" inputMode="decimal" required className={inputCls} placeholder="12 500 000,00" defaultValue={bid?.totalRaw} />
         </Field>
