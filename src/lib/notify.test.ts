@@ -103,6 +103,8 @@ describe.skipIf(!hasDb)("Кому уходят письма (настоящая 
   });
 
   afterAll(async () => {
+    // Убираем свои тендеры из работы: другие тесты считают открытые тендеры в той же тестовой базе.
+    await prisma.tender.updateMany({ where: { title: { endsWith: uniq } }, data: { status: "cancelled" } });
     await prisma.$disconnect();
   });
 
