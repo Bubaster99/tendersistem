@@ -28,9 +28,22 @@
 - **Первый раз:** `cp .env.example .env` (при желании впишите ключ DaData и email поддержки). Без `.env` проект тоже запустится — с тестовыми данными.
 - **Запустить:** `docker compose up --build` → открыть http://localhost:3000. Первый запуск — несколько минут.
 - **Код входа:** в режиме разработки письма не отправляются — код печатается в окне, где запущен проект (строка «Код входа: 123456»). Если запустили в фоне (`-d`): `docker compose logs -f app`.
+- **Админка (снабжение):** http://localhost:3000/admin/login — вход по email + код. Первый админ (`ADMIN_EMAIL`, по умолчанию aiag22msk@gmail.com) создаётся сам при запуске.
+- **Добавить админа:** `docker compose exec app npm run create-admin -- name@company.ru`.
+- **Тестовые данные** (3 объекта, 10 тендеров, 5 контактов, образцы документов) создаются сами при первом запуске на пустой базе.
 - **Остановить:** `Ctrl+C` в окне проекта или `docker compose down`.
-- **Стереть базу и начать с нуля:** `docker compose down -v`.
+- **Стереть базу и файлы, начать с нуля:** `docker compose down -v`.
 - **Тесты:** `docker compose exec app npm test` (или `npm test`, если Node.js установлен на компьютере).
 - **Проверка типов:** `docker compose exec app npm run lint`.
 - **Новая миграция базы (для Claude):** поменять `prisma/schema.prisma`, затем `docker compose exec app npx prisma migrate dev --name <название>`.
 - **Тестовые ИНН без DaData:** любой ИНН из 10 или 12 цифр находит «ООО «Тестстрой …»»; ИНН `0000000000` — «не найдено».
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
