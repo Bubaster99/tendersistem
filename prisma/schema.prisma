@@ -21,22 +21,25 @@ enum UserRole {
 
 // Подрядчик. Реквизиты подтягиваются из DaData по ИНН.
 model Company {
-  id         String        @id @default(cuid())
-  inn        String        @unique
-  kpp        String?
-  ogrn       String?
-  name       String
-  address    String?
-  city       String?
-  workTypes  String[]      @default([])
-  experience String?
-  status     CompanyStatus @default(new)
-  rating     Int?
-  createdAt  DateTime      @default(now())
-  users      User[]
-  downloads  DocumentDownload[]
-  bids       Bid[]
-  watches    TenderWatch[]
+  id           String             @id @default(cuid())
+  inn          String             @unique
+  kpp          String?
+  ogrn         String?
+  name         String
+  address      String?
+  city         String?
+  region       String?
+  workTypes    String[]           @default([]) // id видов работ из мини-анкеты
+  experience   String? // опыт из мини-анкеты: JSON-список до 5 объектов (название, год, сумма, вид работ)
+  onboardedAt  DateTime? // мини-анкета заполнена или пропущена — больше не показываем
+  status       CompanyStatus      @default(new)
+  rating       Int?
+  createdAt    DateTime           @default(now())
+  users        User[]
+  downloads    DocumentDownload[]
+  bids         Bid[]
+  watches      TenderWatch[]
+  subscription Subscription?
 }
 
 model User {
@@ -123,29 +126,31 @@ model Contact {
 
 // Тендер. publishedAt = null — черновик, подрядчики его не видят.
 model Tender {
-  id               String             @id @default(cuid())
-  projectId        String
-  project          Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  workTypeId       String
-  workType         WorkType           @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
-  title            String
-  scope            String?
-  status           TenderStatus       @default(planned)
-  plannedStart     String? // текстом, для «Скоро»: «декабрь 2026»
-  deadlineAt       DateTime?
-  workStart        String?
-  paymentTerms     String?
-  retentionPercent Decimal?           @db.Decimal(5, 2)
-  contactId        String?
-  contact          Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  createdById      String?
-  createdBy        User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  publishedAt      DateTime?
-  createdAt        DateTime           @default(now())
-  documents        TenderDocument[]
-  downloads        DocumentDownload[]
-  bids             Bid[]
-  watches          TenderWatch[]
+  id                 String             @id @default(cuid())
+  projectId          String
+  project            Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  workTypeId         String
+  workType           WorkType           @relation(fields: [workTypeId], references: [id], onDelete: Restrict)
+  title              String
+  scope              String?
+  status             TenderStatus       @default(planned)
+  plannedStart       String? // текстом, для «Скоро»: «декабрь 2026»
+  deadlineAt         DateTime?
+  workStart          String?
+  paymentTerms       String?
+  retentionPercent   Decimal?           @db.Decimal(5, 2)
+  contactId          String?
+  contact            Contact?           @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdById        String?
+  createdBy          User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  publishedAt        DateTime?
+  openNoticeAt       DateTime? // рассылка «Открыт приём КП» подписчикам сделана
+  bidsOpenedNoticeAt DateTime? // снабжению отправлено «Дедлайн прошёл — КП вскрыты»
+  createdAt          DateTime           @default(now())
+  documents          TenderDocument[]
+  downloads          DocumentDownload[]
+  bids               Bid[]
+  watches            TenderWatch[]
 
   @@index([projectId])
 }
@@ -165,12 +170,13 @@ model TenderDocument {
 
 // Кто из подрядчиков скачивал документацию тендера (для счётчика и напоминаний).
 model DocumentDownload {
-  companyId String
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tenderId  String
-  tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
-  firstAt   DateTime @default(now())
-  lastAt    DateTime @default(now())
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenderId       String
+  tender         Tender    @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  firstAt        DateTime  @default(now())
+  lastAt         DateTime  @default(now())
+  reminderSentAt DateTime? // напоминание «2 дня до дедлайна» уже отправлено
 
   @@id([companyId, tenderId])
 }
@@ -226,6 +232,17 @@ model TenderWatch {
   createdAt DateTime @default(now())
 
   @@id([companyId, tenderId])
+}
+
+// Подписка на новые тендеры. Пустой список объектов — все объекты.
+model Subscription {
+  companyId   String   @id
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  workTypeIds String[] @default([])
+  projectIds  String[] @default([])
+  byEmail     Boolean  @default(true)
+  byTelegram  Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
 }
 
 // Журнал действий: вход, просмотр/скачивание КП, изменение статуса тендера, выбор победителя.

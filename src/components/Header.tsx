@@ -7,6 +7,7 @@ import { Bell, LogOut, Settings, X } from "lucide-react";
 import { logout } from "@/app/(app)/actions";
 import { Logo } from "./Logo";
 import { OPEN_SUBSCRIPTION_EVENT } from "./SubscribeBanner";
+import { SubscriptionPanel, type SubscriptionPanelData } from "./SubscriptionPanel";
 
 const NAV = [
   { href: "/objects", label: "Объекты" },
@@ -15,7 +16,15 @@ const NAV = [
   { href: "/contacts", label: "Контакты" },
 ];
 
-export function Header({ companyName, isStaff = false }: { companyName: string; isStaff?: boolean }) {
+export function Header({
+  companyName,
+  isStaff = false,
+  subscription,
+}: {
+  companyName: string;
+  isStaff?: boolean;
+  subscription: SubscriptionPanelData | null;
+}) {
   const pathname = usePathname();
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
 
@@ -81,7 +90,7 @@ export function Header({ companyName, isStaff = false }: { companyName: string; 
       {subscriptionOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-dark/40" onClick={() => setSubscriptionOpen(false)}>
           <aside
-            className="h-full w-full max-w-[420px] bg-card p-5 shadow-xl"
+            className="h-full w-full max-w-[420px] overflow-y-auto bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
             aria-label="Подписка"
           >
@@ -96,7 +105,7 @@ export function Header({ companyName, isStaff = false }: { companyName: string; 
                 <X size={20} strokeWidth={1.75} />
               </button>
             </div>
-            <p className="mt-4 text-muted">Настройка подписки на новые тендеры появится позже.</p>
+            <SubscriptionPanel data={subscription} onSaved={() => setSubscriptionOpen(false)} />
           </aside>
         </div>
       )}

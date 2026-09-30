@@ -10,6 +10,7 @@ import {
   hashCode,
 } from "./login-code";
 import { sendMail } from "./mailer";
+import { loginCodeEmail } from "./mail/templates";
 
 export type Fail = { ok: false; error: string };
 
@@ -38,11 +39,7 @@ export async function issueLoginCode(email: string): Promise<{ ok: true } | Fail
     }),
   ]);
 
-  await sendMail({
-    to: email,
-    subject: `Код входа: ${code}`,
-    text: `Ваш код для входа на тендерную площадку: ${code}\n\nКод действует 10 минут. Если вы не запрашивали код — просто проигнорируйте это письмо.`,
-  });
+  await sendMail({ to: email, ...loginCodeEmail(code) });
   return { ok: true };
 }
 

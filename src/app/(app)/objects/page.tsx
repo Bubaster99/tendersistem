@@ -3,6 +3,7 @@ import { MapPin } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
 import { closeExpiredTenders } from "@/lib/bids";
+import { getSubscription } from "@/lib/subscription";
 import { visibleTenderWhere } from "@/lib/tenders";
 import { ProjectCover } from "@/components/ProjectCover";
 import { SubscribeBanner } from "@/components/SubscribeBanner";
@@ -10,8 +11,10 @@ import { SubscribeBanner } from "@/components/SubscribeBanner";
 export const metadata = { title: "Объекты — Тендерная площадка" };
 
 export default async function ObjectsPage() {
-  await requireUserPage();
+  const user = await requireUserPage();
   await closeExpiredTenders();
+  // Баннер «Не пропускайте новые тендеры» — пока подрядчик не настроил подписку.
+  const showBanner = user.role === "contractor" && !!user.companyId && !(await getSubscription(user.companyId));
   const projects = await prisma.project.findMany({
     where: { isPublished: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -23,9 +26,11 @@ export default async function ObjectsPage() {
       <h1 className="font-display text-2xl sm:text-3xl">Объекты</h1>
       <p className="mt-2 text-muted">Жилые комплексы, на которые мы ищем подрядчиков.</p>
 
-      <div className="mt-6">
-        <SubscribeBanner />
-      </div>
+      {showBanner && (
+        <div className="mt-6">
+          <SubscribeBanner />
+        </div>
+      )}
 
       {projects.length === 0 ? (
         <div className="mt-6 rounded-2xl border border-line bg-card p-6 text-muted">Объекты скоро появятся.</div>

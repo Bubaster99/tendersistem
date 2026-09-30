@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import type { DocumentKind, TenderStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireStaffAction } from "@/lib/access";
 import { closeExpiredTenders } from "@/lib/bids";
 import { checkDocument } from "@/lib/files";
+import { sendTenderOpenedNotices } from "@/lib/notify";
 import { decimal, file, str } from "@/lib/form";
 import { removeFile, saveUpload } from "@/lib/storage";
 import { parseMoscowInput } from "@/lib/time";
@@ -100,6 +102,8 @@ export async function saveTender(id: string | null, fd: FormData): Promise<Actio
   };
 
   revalidatePath("/", "layout");
+  // Открыли приём КП — сразу рассылка подписчикам и нажавшим «Сообщить о старте» (не ждём расписания).
+  if (status === "open") after(() => sendTenderOpenedNotices());
   if (existing) {
     await prisma.tender.update({ where: { id: existing.id }, data });
     const msg: Record<Intent, string> = {
