@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireStaffPage } from "@/lib/access";
+import { bidCounts, closeExpiredTenders } from "@/lib/bids";
 import { btnPrimary, cardCls } from "@/components/ui";
 import { AdminStatusBadge } from "@/components/StatusBadge";
 import { formatDateTime } from "@/lib/time";
@@ -9,6 +10,7 @@ import { formatDateTime } from "@/lib/time";
 export default async function AdminTendersPage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
   await requireStaffPage();
   const { project } = await searchParams;
+  await closeExpiredTenders();
 
   const [projects, tenders] = await Promise.all([
     prisma.project.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, name: true } }),
@@ -22,6 +24,9 @@ export default async function AdminTendersPage({ searchParams }: { searchParams:
       },
     }),
   ]);
+
+  // До дедлайна снабжение видит только количество КП.
+  const counts = await bidCounts(tenders.map((t) => t.id));
 
   const chip = (active: boolean) =>
     `shrink-0 rounded-full border px-3.5 py-2 text-sm transition ${active ? "border-ink bg-ink text-white" : "border-line bg-card hover:bg-bg"}`;
@@ -56,7 +61,7 @@ export default async function AdminTendersPage({ searchParams }: { searchParams:
               <th className="px-4 py-3 font-normal" title="Сколько компаний скачали документацию">
                 Скачали док.
               </th>
-              <th className="px-4 py-3 font-normal" title="Появится на этапе подачи КП">
+              <th className="px-4 py-3 font-normal" title="Сколько компаний подали КП. Суммы — после окончания приёма">
                 Подали КП
               </th>
             </tr>
@@ -84,7 +89,7 @@ export default async function AdminTendersPage({ searchParams }: { searchParams:
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">{t.deadlineAt ? formatDateTime(t.deadlineAt) : "—"}</td>
                 <td className="px-4 py-3">{t._count.downloads}</td>
-                <td className="px-4 py-3 text-muted">—</td>
+                <td className="px-4 py-3">{counts.get(t.id) ?? 0}</td>
               </tr>
             ))}
           </tbody>

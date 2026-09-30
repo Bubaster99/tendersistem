@@ -52,3 +52,29 @@ export function parseMoney(raw: string | null): number {
   if (!/^\d+(\.\d+)?$/.test(clean)) return Number.NaN;
   return Number(clean);
 }
+
+/** Файл КП: только Excel .xlsx до 20 МБ. head — первые байты файла (xlsx — это zip, начинается с «PK»). */
+export function checkBidFile(name: string, size: number, head?: Uint8Array): string | null {
+  if (size <= 0) return "Файл пустой";
+  if (size > BID_MAX_BYTES) return "Файл больше 20 МБ";
+  if (!/\.xlsx$/i.test(name.trim())) return "КП — только файл Excel (.xlsx), заполненный по шаблону";
+  if (head && !(head[0] === 0x50 && head[1] === 0x4b)) return "Файл не похож на Excel (.xlsx). Сохраните КП в Excel как .xlsx и загрузите снова";
+  return null;
+}
+
+/** Статус КП в «Моих заявках» (этап 3): до дедлайна — «Подано», после — «Вскрыто». */
+export function bidStage(deadlineAt: Date | null, now: Date): "Подано" | "Вскрыто" {
+  return isSealed(deadlineAt, now) ? "Подано" : "Вскрыто";
+}
+
+const money = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** 12500000 → «12 500 000,00 ₽» */
+export function formatMoney(v: number | string | { toString(): string }): string {
+  return `${money.format(Number(String(v)))} ₽`;
+}
+
+/** 30 → «30%», 12.5 → «12,5%» */
+export function formatPercent(v: number | string | { toString(): string }): string {
+  return `${String(Number(String(v))).replace(".", ",")}%`;
+}

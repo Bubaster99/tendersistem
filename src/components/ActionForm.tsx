@@ -14,12 +14,14 @@ export function ActionForm({
   className,
   resetOnSuccess = false,
   confirmText,
+  onSuccess,
 }: {
   action: (fd: FormData) => Promise<ActionResult>;
   children: React.ReactNode;
   className?: string;
   resetOnSuccess?: boolean;
   confirmText?: string;
+  onSuccess?: (message?: string) => void;
 }) {
   const ref = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export function ActionForm({
       else {
         if (res?.message) setMessage(res.message);
         if (resetOnSuccess) ref.current?.reset();
+        onSuccess?.(res?.message);
       }
     });
   }

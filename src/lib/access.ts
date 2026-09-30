@@ -1,11 +1,9 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import type { UserRole } from "@prisma/client";
 import { getCurrentUser } from "./session";
+import { isStaffRole } from "./access-rules";
 
-export function isStaffRole(role: UserRole): boolean {
-  return role === "buyer" || role === "admin";
-}
+export { isStaffRole };
 
 /** Страницы админки: без входа или не сотрудник — на вход в админку. */
 export async function requireStaffPage() {
@@ -25,5 +23,12 @@ export async function requireUserPage() {
 export async function requireStaffAction() {
   const user = await getCurrentUser();
   if (!user || !isStaffRole(user.role)) throw new Error("Нет доступа");
+  return user;
+}
+
+/** Действия подрядчика (server actions): любой вошедший; права на конкретное действие проверяются дальше. */
+export async function requireUserAction() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Нужно войти");
   return user;
 }

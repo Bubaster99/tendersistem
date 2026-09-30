@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
+import { closeExpiredTenders } from "@/lib/bids";
 import { visibleTenderWhere } from "@/lib/tenders";
 import { ProjectCover } from "@/components/ProjectCover";
 import { SubscribeBanner } from "@/components/SubscribeBanner";
@@ -10,6 +11,7 @@ export const metadata = { title: "Объекты — Тендерная площ
 
 export default async function ObjectsPage() {
   await requireUserPage();
+  await closeExpiredTenders();
   const projects = await prisma.project.findMany({
     where: { isPublished: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],

@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, ExternalLink, FileText, Trash2 } from "lucide-react";
+import { Download, ExternalLink, FileSpreadsheet, FileText, Lock, Trash2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireStaffPage } from "@/lib/access";
+import { closeExpiredTenders, staffTenderBids, type StaffBids } from "@/lib/bids";
+import { formatMoney, formatPercent } from "@/lib/bid-rules";
+import { clientIp } from "@/lib/request-ip";
+import { formatDateTime } from "@/lib/time";
 import { ActionForm, Field } from "@/components/ActionForm";
 import { AdminStatusBadge } from "@/components/StatusBadge";
 import { btnDanger, btnPrimary, cardCls, inputCls } from "@/components/ui";
@@ -19,9 +23,10 @@ export default async function EditTenderPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ created?: string }>;
 }) {
-  await requireStaffPage();
+  const user = await requireStaffPage();
   const { id } = await params;
   const { created } = await searchParams;
+  await closeExpiredTenders();
   const [tender, options] = await Promise.all([
     prisma.tender.findUnique({
       where: { id },
@@ -30,6 +35,8 @@ export default async function EditTenderPage({
     tenderFormOptions(),
   ]);
   if (!tender) notFound();
+  // До дедлайна — только количество; после — список, просмотр пишется в журнал.
+  const bids = tender.publishedAt ? await staffTenderBids(user, tender.id, await clientIp()) : null;
 
   const docs = [...tender.documents].sort(
     (a, b) => DOCUMENT_KIND_ORDER.indexOf(a.kind) - DOCUMENT_KIND_ORDER.indexOf(b.kind) || a.uploadedAt.getTime() - b.uploadedAt.getTime(),
@@ -59,6 +66,8 @@ export default async function EditTenderPage({
         )}
       </p>
       {created && <p className="mt-4 rounded-[10px] bg-open-bg px-4 py-3 text-sm text-open">Тендер сохранён. Теперь загрузите документы.</p>}
+
+      {bids && <BidsSection bids={bids} />}
 
       <div className="mt-6">
         <TenderForm tender={tender} options={options} />
@@ -115,5 +124,51 @@ export default async function EditTenderPage({
         </ActionForm>
       )}
     </div>
+  );
+}
+
+/** КП участников. Сравнительная таблица, переторжка и выбор победителя — этап 5. */
+function BidsSection({ bids }: { bids: StaffBids }) {
+  if (bids.sealed) {
+    return (
+      <div className={`${cardCls} mt-6 flex gap-3 p-5`}>
+        <Lock size={20} strokeWidth={1.75} className="mt-0.5 shrink-0 text-muted" />
+        <div>
+          <p className="font-medium">Подано КП: {bids.count}</p>
+          <p className="mt-1 text-sm text-muted">
+            Суммы и файлы КП закрыты до окончания приёма{bids.deadlineAt ? ` — ${formatDateTime(bids.deadlineAt)}` : ""}. Их не видит никто, включая администратора.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <section className="mt-6">
+      <h2 className="font-display text-lg">
+        КП участников <span className="text-muted">{bids.count}</span>
+      </h2>
+      <p className="mt-1 text-sm text-muted">Приём завершён, КП вскрыты. Каждый просмотр и скачивание записываются в журнал.</p>
+      <div className={`${cardCls} mt-3 divide-y divide-line`}>
+        {bids.bids.length === 0 && <p className="p-4 text-muted">КП не подавали.</p>}
+        {bids.bids.map((b) => (
+          <div key={b.id} className="p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="font-medium">
+                {b.company.name} <span className="text-sm font-normal text-muted">ИНН {b.company.inn}</span>
+              </p>
+              <p className="font-display text-lg">{formatMoney(b.totalWithVat)}</p>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Срок: {b.durationDays} дн. · Аванс: {formatPercent(b.advancePercent)} · Подано: {formatDateTime(b.replacedAt ?? b.submittedAt)}
+              {b.versions > 0 && ` · замен: ${b.versions}`}
+            </p>
+            {b.comment && <p className="mt-2 whitespace-pre-line text-sm">{b.comment}</p>}
+            <a href={`/api/bids/${b.id}/file`} className="mt-2 inline-flex items-center gap-2 text-sm text-accent underline underline-offset-2">
+              <FileSpreadsheet size={16} strokeWidth={1.75} /> {b.fileName} · {formatSize(b.fileSize)}
+            </a>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
