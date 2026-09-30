@@ -35,6 +35,8 @@ model Company {
   createdAt  DateTime      @default(now())
   users      User[]
   downloads  DocumentDownload[]
+  bids       Bid[]
+  watches    TenderWatch[]
 }
 
 model User {
@@ -142,6 +144,8 @@ model Tender {
   createdAt        DateTime           @default(now())
   documents        TenderDocument[]
   downloads        DocumentDownload[]
+  bids             Bid[]
+  watches          TenderWatch[]
 
   @@index([projectId])
 }
@@ -169,4 +173,73 @@ model DocumentDownload {
   lastAt    DateTime @default(now())
 
   @@id([companyId, tenderId])
+}
+
+// КП. До дедлайна суммы и файлы не отдаются никому, кроме самой компании (см. src/lib/bids.ts).
+// Уникально: (тендер, компания, раунд) — повторная подача заменяет КП, прежняя версия уходит в историю.
+model Bid {
+  id             String       @id @default(cuid())
+  tenderId       String
+  tender         Tender       @relation(fields: [tenderId], references: [id], onDelete: Restrict)
+  companyId      String
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  round          Int          @default(1)
+  fileKey        String
+  fileName       String
+  fileSize       Int
+  totalWithVat   Decimal      @db.Decimal(15, 2)
+  durationDays   Int
+  advancePercent Decimal      @db.Decimal(5, 2)
+  comment        String?
+  submittedAt    DateTime     @default(now()) // первая подача
+  replacedAt     DateTime? // последняя замена
+  isWithdrawn    Boolean      @default(false)
+  versions       BidVersion[]
+
+  @@unique([tenderId, companyId, round])
+}
+
+// История замен КП.
+model BidVersion {
+  id             String   @id @default(cuid())
+  bidId          String
+  bid            Bid      @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  fileKey        String
+  fileName       String
+  fileSize       Int
+  totalWithVat   Decimal  @db.Decimal(15, 2)
+  durationDays   Int
+  advancePercent Decimal  @db.Decimal(5, 2)
+  comment        String?
+  submittedAt    DateTime // когда была подана эта версия
+  replacedAt     DateTime @default(now()) // когда её заменили
+
+  @@index([bidId])
+}
+
+// «Сообщить о старте» для тендера со статусом «Скоро».
+model TenderWatch {
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tenderId  String
+  tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([companyId, tenderId])
+}
+
+// Журнал действий: вход, просмотр/скачивание КП, изменение статуса тендера, выбор победителя.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userEmail String?
+  action    String
+  entity    String?
+  entityId  String?
+  details   String?
+  ip        String?
+  at        DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
 }
