@@ -26,9 +26,8 @@ export function SubscriptionPanel({ data, onSaved }: { data: SubscriptionPanelDa
       </section>
 
       <section>
-        <h3 className="font-medium">Объекты</h3>
-        <p className="mb-2.5 text-sm text-muted">Ничего не выбрано — все объекты, в том числе новые.</p>
-        <Chips name="project" options={data.projects} selected={cur?.projectIds ?? []} />
+        <h3 className="mb-2.5 font-medium">Объекты</h3>
+        <Chips name="project" options={data.projects} selected={cur?.projectIds ?? []} emptyHint="Ничего не выбрано — все объекты, в том числе новые" />
       </section>
 
       <section>
