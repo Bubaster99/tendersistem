@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { DocumentKind, TenderStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireStaffAction } from "@/lib/access";
+import { closeExpiredTenders } from "@/lib/bids";
 import { checkDocument } from "@/lib/files";
 import { decimal, file, str } from "@/lib/form";
 import { removeFile, saveUpload } from "@/lib/storage";
@@ -23,6 +24,7 @@ export async function saveTender(id: string | null, fd: FormData): Promise<Actio
   const intentRaw = String(fd.get("intent") ?? "save");
   const intent: Intent = (["save", "draft", "planned", "open"] as const).find((i) => i === intentRaw) ?? "save";
 
+  await closeExpiredTenders();
   const existing = id ? await prisma.tender.findUnique({ where: { id } }) : null;
   if (id && !existing) return { error: "Тендер не найден" };
 
@@ -69,6 +71,14 @@ export async function saveTender(id: string | null, fd: FormData): Promise<Actio
 
   // Приём КП нельзя открыть с прошедшим дедлайном (время серверное, московское).
   const deadlineChanged = (deadlineAt?.getTime() ?? null) !== (existing?.deadlineAt?.getTime() ?? null);
+  if (existing && deadlineChanged) {
+    // Запечатанные КП: срок нельзя двигать так, чтобы вскрыть КП раньше, чем обещали участникам.
+    if (existing.status !== "planned" && existing.status !== "open") return { error: "Приём КП завершён — срок окончания приёма менять нельзя" };
+    const hasBids = (await prisma.bid.count({ where: { tenderId: existing.id } })) > 0;
+    if (hasBids && existing.deadlineAt && (!deadlineAt || deadlineAt < existing.deadlineAt)) {
+      return { error: "КП уже поданы — окончание приёма можно только продлить, но не сократить" };
+    }
+  }
   if (status === "open" && (intent === "open" || deadlineChanged)) {
     if (!deadlineAt) return { error: "Чтобы открыть приём КП, укажите дату и время окончания приёма" };
     if (deadlineAt <= now) return { error: "Дата окончания приёма КП уже прошла" };

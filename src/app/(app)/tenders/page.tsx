@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
+import { closeExpiredTenders, ownBidTenderIds } from "@/lib/bids";
 import { sortForContractor, tenderGroup, visibleTenderWhere, type TenderGroup } from "@/lib/tenders";
 import { TenderRow } from "@/components/TenderRow";
 
@@ -14,8 +15,10 @@ const FILTERS: { key: TenderGroup | "all"; label: string }[] = [
 ];
 
 export default async function TendersPage({ searchParams }: { searchParams: Promise<{ f?: string }> }) {
-  await requireUserPage();
+  const user = await requireUserPage();
   const { f } = await searchParams;
+  await closeExpiredTenders();
+  const mine = await ownBidTenderIds(user);
   const filter = FILTERS.find((x) => x.key === f)?.key ?? "all";
 
   const all = sortForContractor(
@@ -53,7 +56,7 @@ export default async function TendersPage({ searchParams }: { searchParams: Prom
         {list.length === 0 ? (
           <p className="p-5 text-muted">Здесь пока пусто.</p>
         ) : (
-          list.map((t) => <TenderRow key={t.id} tender={t} showProject />)
+          list.map((t) => <TenderRow key={t.id} tender={t} showProject submitted={mine.has(t.id)} />)
         )}
       </div>
     </div>

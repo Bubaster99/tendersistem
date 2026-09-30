@@ -33,7 +33,8 @@
 - **Тестовые данные** (3 объекта, 10 тендеров, 5 контактов, образцы документов) создаются сами при первом запуске на пустой базе.
 - **Остановить:** `Ctrl+C` в окне проекта или `docker compose down`.
 - **Стереть базу и файлы, начать с нуля:** `docker compose down -v`.
-- **Тесты:** `docker compose exec app npm test` (или `npm test`, если Node.js установлен на компьютере).
+- **Тесты:** `docker compose exec app npm test` (или `npm test`, если Node.js установлен на компьютере). Тесты запечатанных КП работают с настоящей базой в отдельной схеме `vitest` — рабочие данные не трогаются. Без базы (нет `DATABASE_URL`) эти тесты пропускаются.
+- **Проверить дедлайн без ожидания (для Claude):** `docker compose exec db psql -U tender -c "update \"Tender\" set \"deadlineAt\"=now()-interval '1 minute' where title like 'Навесной%'"` — при следующем открытии страницы тендер сам станет «Приём закрыт».
 - **Проверка типов:** `docker compose exec app npm run lint`.
 - **Новая миграция базы (для Claude):** поменять `prisma/schema.prisma`, затем `docker compose exec app npx prisma migrate dev --name <название>`.
 - **Тестовые ИНН без DaData:** любой ИНН из 10 или 12 цифр находит «ООО «Тестстрой …»»; ИНН `0000000000` — «не найдено».

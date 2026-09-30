@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { MapPin } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
+import { closeExpiredTenders, ownBidTenderIds } from "@/lib/bids";
 import { sortForContractor, tenderGroup, visibleTenderWhere, type TenderGroup } from "@/lib/tenders";
 import { ProjectCover } from "@/components/ProjectCover";
 import { TenderRow } from "@/components/TenderRow";
@@ -14,8 +15,10 @@ const BLOCKS: { group: TenderGroup; title: string; empty: string }[] = [
 ];
 
 export default async function ObjectPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserPage();
+  const user = await requireUserPage();
   const { id } = await params;
+  await closeExpiredTenders();
+  const mine = await ownBidTenderIds(user);
   const project = await prisma.project.findFirst({
     where: { id, isPublished: true },
     include: { tenders: { where: visibleTenderWhere, include: { workType: { select: { name: true } } } } },
@@ -67,7 +70,7 @@ export default async function ObjectPage({ params }: { params: Promise<{ id: str
               {b.title} <span className="text-muted">{list.length}</span>
             </h2>
             <div className="mt-3 divide-y divide-line overflow-hidden rounded-2xl border border-line bg-card">
-              {list.length === 0 ? <p className="p-5 text-muted">{b.empty}</p> : list.map((t) => <TenderRow key={t.id} tender={t} />)}
+              {list.length === 0 ? <p className="p-5 text-muted">{b.empty}</p> : list.map((t) => <TenderRow key={t.id} tender={t} submitted={mine.has(t.id)} />)}
             </div>
           </section>
         );

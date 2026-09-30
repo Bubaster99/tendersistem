@@ -3,15 +3,20 @@ import { notFound } from "next/navigation";
 import { Archive, CalendarClock, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
+import { closeExpiredTenders, getOwnBid, isWatching } from "@/lib/bids";
+import { formatMoney, formatPercent } from "@/lib/bid-rules";
 import { formatSize } from "@/lib/files";
 import { formatDateTime } from "@/lib/time";
 import { DOCUMENT_KIND_LABEL, DOCUMENT_KIND_ORDER, visibleTenderWhere } from "@/lib/tenders";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ContactCard } from "@/components/ContactCard";
+import { BidPanel, type OwnBidView } from "./BidPanel";
+import { WatchButton } from "./WatchButton";
 
 export default async function TenderPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUserPage();
+  const user = await requireUserPage();
   const { id } = await params;
+  await closeExpiredTenders();
   const tender = await prisma.tender.findFirst({
     where: { id, ...visibleTenderWhere },
     include: {
@@ -22,6 +27,7 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
     },
   });
   if (!tender) notFound();
+  const [bid, watching] = await Promise.all([getOwnBid(user, tender.id), isWatching(user, tender.id)]);
 
   const docs = [...tender.documents].sort(
     (a, b) => DOCUMENT_KIND_ORDER.indexOf(a.kind) - DOCUMENT_KIND_ORDER.indexOf(b.kind) || a.uploadedAt.getTime() - b.uploadedAt.getTime(),
@@ -112,7 +118,13 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-6">
-          <StatusPanel status={tender.status} deadlineAt={tender.deadlineAt} plannedStart={tender.plannedStart} />
+          <StatusPanel
+            tender={tender}
+            isContractor={user.role === "contractor" && !!user.companyId}
+            bid={bid ? ownBidView(bid) : null}
+            watching={watching}
+            bomDocId={docs.find((d) => d.kind === "bom_template")?.id ?? null}
+          />
           {tender.contact && (
             <div>
               <p className="mb-2 text-sm text-muted">Ответственный снабженец</p>
@@ -125,30 +137,60 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
   );
 }
 
-/** Правая колонка по статусу. Форма подачи КП появится на этапе 3. */
-function StatusPanel({ status, deadlineAt, plannedStart }: { status: string; deadlineAt: Date | null; plannedStart: string | null }) {
+function ownBidView(b: NonNullable<Awaited<ReturnType<typeof getOwnBid>>>): OwnBidView {
+  return {
+    id: b.id,
+    fileName: b.fileName,
+    fileSize: formatSize(b.fileSize),
+    total: formatMoney(b.totalWithVat),
+    totalRaw: String(b.totalWithVat).replace(".", ","),
+    durationDays: b.durationDays,
+    advance: formatPercent(b.advancePercent),
+    advanceRaw: String(Number(String(b.advancePercent))).replace(".", ","),
+    comment: b.comment,
+    submittedAt: formatDateTime(b.submittedAt),
+    replacedAt: b.replacedAt ? formatDateTime(b.replacedAt) : null,
+    versions: b._count.versions,
+  };
+}
+
+/** Правая колонка по статусу тендера (раздел 4.5 SPEC.md). */
+function StatusPanel({
+  tender,
+  isContractor,
+  bid,
+  watching,
+  bomDocId,
+}: {
+  tender: { id: string; status: string; deadlineAt: Date | null; plannedStart: string | null };
+  isContractor: boolean;
+  bid: OwnBidView | null;
+  watching: boolean;
+  bomDocId: string | null;
+}) {
   const box = "rounded-2xl border border-line bg-card p-5";
-  if (status === "open") {
+  const accepting = tender.status === "open" && tender.deadlineAt && tender.deadlineAt.getTime() > Date.now();
+  if (accepting && tender.deadlineAt) {
+    const deadline = formatDateTime(tender.deadlineAt);
+    if (isContractor) return <BidPanel tenderId={tender.id} deadline={deadline} bomDocId={bomDocId} bid={bid} />;
     return (
       <div className={box}>
         <p className="flex items-center gap-2 font-medium text-open">
           <CalendarClock size={20} strokeWidth={1.75} /> Идёт приём КП
         </p>
-        {deadlineAt && <p className="mt-2">до {formatDateTime(deadlineAt)}</p>}
-        <p className="mt-3 text-sm text-muted">
-          Скачайте документацию и заполните КП по шаблону (файл с пометкой «Шаблон для КП»). Подача КП на площадке скоро станет доступна.
-        </p>
-        <p className="mt-3 text-sm text-muted">КП закрыты: суммы и файлы никто не видит до окончания приёма.</p>
+        <p className="mt-2">до {deadline}</p>
+        <p className="mt-3 text-sm text-muted">Подавать КП могут только подрядчики. Вы вошли как сотрудник.</p>
       </div>
     );
   }
-  if (status === "planned") {
+  if (tender.status === "planned") {
     return (
       <div className={box}>
         <p className="flex items-center gap-2 font-medium text-soon">
           <CalendarClock size={20} strokeWidth={1.75} /> Скоро
         </p>
-        <p className="mt-2">Приём КП откроется: {plannedStart || "дата уточняется"}</p>
+        <p className="mt-2">Приём КП откроется: {tender.plannedStart || "дата уточняется"}</p>
+        {isContractor && <WatchButton tenderId={tender.id} watching={watching} />}
       </div>
     );
   }
@@ -156,6 +198,14 @@ function StatusPanel({ status, deadlineAt, plannedStart }: { status: string; dea
     <div className={box}>
       <p className="font-medium">Приём завершён</p>
       <p className="mt-2 text-sm text-muted">Итоги направлены участникам.</p>
+      {bid && (
+        <p className="mt-3 text-sm">
+          Ваше КП подано {bid.replacedAt ?? bid.submittedAt} —{" "}
+          <Link href="/my-bids" className="text-accent underline underline-offset-2">
+            Мои заявки
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
