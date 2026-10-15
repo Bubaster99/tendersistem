@@ -1,7 +1,7 @@
 // Начальные данные. Запускается при каждом старте (npx prisma db seed), повторный запуск ничего не дублирует:
 // - справочник видов работ (раздел 3 SPEC.md) и первый администратор — всегда;
 // - тестовые объекты, тендеры и контакты — только если в базе ещё нет ни одного объекта.
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import ExcelJS from "exceljs";
@@ -130,11 +130,32 @@ async function seedTestData() {
     await prisma.workType.update({ where: { name }, data: { responsibleContactId: contactId } });
   }
 
-  const [north, river, linden] = await Promise.all([
-    prisma.project.create({ data: { name: "ЖК «Северный парк»", address: "г. Москва, ул. Лесная, 12", stage: "Монолитные работы", finishDate: "IV кв. 2027", size: "17 этажей, 3 секции", sortOrder: 1, isPublished: true } }),
-    prisma.project.create({ data: { name: "ЖК «Речной квартал»", address: "Московская обл., г. Химки, Набережная ул., 5", stage: "Котлован", finishDate: "II кв. 2028", size: "25 этажей, 2 секции", sortOrder: 2, isPublished: true } }),
-    prisma.project.create({ data: { name: "ЖК «Липовая роща»", address: "г. Москва, пос. Коммунарка, Липовая ул., 3", stage: "Отделочные работы", finishDate: "II кв. 2027", size: "9 этажей, 4 секции", sortOrder: 3, isPublished: true } }),
-  ]);
+  // Наши объекты. Обложки — из prisma/seed-assets.
+  const cover = async (file: string) => saveFile("covers", "jpg", await readFile(path.join(__dirname, "seed-assets", file)));
+  const sakharov = await prisma.project.create({
+    data: {
+      name: "Резиденции «Сахаров Парк»",
+      address: "г. Барнаул, пр-т Социалистический, 97",
+      stage: "Монолит (башня 1), инженерные работы",
+      finishDate: "IV кв. 2029",
+      coverImage: await cover("sakharov-park.jpg"),
+      sortOrder: 1,
+      isPublished: true,
+    },
+  });
+  const shirota = await prisma.project.create({
+    data: {
+      name: "«Широта на Павловском»",
+      address: "г. Барнаул, Павловский тракт, 198а",
+      stage: "Котлован",
+      finishDate: "I кв. 2030",
+      coverImage: await cover("shirota.jpg"),
+      sortOrder: 2,
+      isPublished: true,
+    },
+  });
+  // Тестовые тендеры распределены по объектам с учётом стадии: на «Широте» — котлован и каркас.
+  const [north, river, linden] = [sakharov, shirota, sakharov];
 
   type T = {
     projectId: string;
@@ -201,7 +222,7 @@ async function main() {
   await seedWorkTypes();
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) console.log(await ensureAdmin(prisma, adminEmail));
-  if (await seedTestData()) console.log("Тестовые данные созданы: 3 объекта, 10 тендеров, 5 контактов");
+  if (await seedTestData()) console.log("Тестовые данные созданы: 2 объекта, 10 тендеров, 5 контактов");
 }
 
 main()
