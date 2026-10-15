@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireUserAction } from "@/lib/access";
 import { closeExpiredTenders, setWatch, submitBid } from "@/lib/bids";
 import { parseMoney } from "@/lib/bid-rules";
+import { notifyBidSubmitted } from "@/lib/notify";
 import { decimal, file, str } from "@/lib/form";
 import { clientIp } from "@/lib/request-ip";
 import type { ActionResult } from "@/components/ActionForm";
@@ -27,6 +29,8 @@ export async function submitBidAction(tenderId: string, fd: FormData): Promise<A
   );
   revalidatePath("/", "layout");
   if ("error" in res) return { error: res.error };
+  const companyId = user.companyId!;
+  after(() => notifyBidSubmitted(companyId, tenderId, res.replaced)); // подтверждение + снабжению (без суммы)
   return { message: res.replaced ? "КП заменено" : "КП принято" };
 }
 

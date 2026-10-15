@@ -1,9 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { prisma } from "@/lib/db";
 import { findCompanyByInn, type CompanyInfo } from "@/lib/dadata";
 import { consumeLoginCode, issueLoginCode, type Fail } from "@/lib/login-flow";
+import { notifyNewCompany } from "@/lib/notify";
 import { createSession } from "@/lib/session";
 import { isValidEmail, isValidInn, normalizeEmail, normalizeInn } from "@/lib/validation";
 
@@ -80,6 +82,8 @@ export async function verifyCode(input: { inn: string; email: string; code: stri
     const found = await lookupInn(inn);
     if (!found.ok) return found;
     company = await prisma.company.upsert({ where: { inn }, update: {}, create: found.company });
+    const newCompanyId = company.id;
+    after(() => notifyNewCompany(newCompanyId, email)); // снабжению — «Новая регистрация»
   }
 
   const now = new Date();
@@ -91,5 +95,6 @@ export async function verifyCode(input: { inn: string; email: string; code: stri
 
   console.log(`[вход] ${email} (ИНН ${inn}) вошёл в ${now.toISOString()}`);
   await createSession(user.id);
-  redirect("/objects");
+  // Первый вход — мини-анкета (её можно пропустить).
+  redirect(company.onboardedAt ? "/objects" : "/welcome");
 }

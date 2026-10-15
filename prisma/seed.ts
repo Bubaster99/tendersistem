@@ -177,6 +177,9 @@ async function seedTestData() {
         retentionPercent: 5,
         contactId: responsible[t.workType],
         publishedAt: new Date(now - (30 - i) * 86400_000),
+        // Тестовые тендеры — без писем: будто рассылки по ним уже прошли.
+        openNoticeAt: t.status !== "planned" ? new Date(now) : null,
+        bidsOpenedNoticeAt: t.deadlineDays !== undefined && t.deadlineDays < 0 ? new Date(now) : null,
       },
     });
 
