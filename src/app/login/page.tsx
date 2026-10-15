@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
+import { FooterLinks } from "@/components/FooterLinks";
 import { Logo } from "@/components/Logo";
 import { LoginForm } from "./LoginForm";
 
@@ -21,17 +21,7 @@ export default async function LoginPage() {
       <div className="mt-6">
         <LoginForm />
       </div>
-      <nav className="mt-auto flex flex-wrap gap-x-5 gap-y-2 pt-10 text-sm text-muted">
-        <Link href="/about" className="underline underline-offset-2 hover:text-ink">
-          О площадке
-        </Link>
-        <Link href="/rules" className="underline underline-offset-2 hover:text-ink">
-          Положение о тендерах
-        </Link>
-        <Link href="/privacy" className="underline underline-offset-2 hover:text-ink">
-          Политика обработки ПДн
-        </Link>
-      </nav>
+      <FooterLinks hide="/login" className="mt-auto pt-10" />
     </main>
   );
 }

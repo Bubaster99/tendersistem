@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
+import { FooterLinks } from "./FooterLinks";
 import { Logo } from "./Logo";
 
 /** Публичная текстовая страница (юр. документы, «О площадке»). draft — пометка «согласовать с юристом». */
@@ -17,20 +17,7 @@ export function LegalStub({ title, draft = true, children }: { title: string; dr
       <div className="legal mt-6 space-y-4 rounded-2xl border border-line bg-card p-5 leading-relaxed sm:p-8 [&_h2]:mt-6 [&_h2]:font-display [&_h2]:text-lg [&_li]:mt-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5">
         {children ?? <p className="text-muted">Текст готовится.</p>}
       </div>
-      <nav className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
-        <Link href="/about" className="underline underline-offset-2 hover:text-ink">
-          О площадке
-        </Link>
-        <Link href="/rules" className="underline underline-offset-2 hover:text-ink">
-          Положение о тендерах
-        </Link>
-        <Link href="/privacy" className="underline underline-offset-2 hover:text-ink">
-          Политика обработки персональных данных
-        </Link>
-        <Link href="/login" className="underline underline-offset-2 hover:text-ink">
-          Вход для подрядчиков
-        </Link>
-      </nav>
+      <FooterLinks className="mt-6" />
     </main>
   );
 }
