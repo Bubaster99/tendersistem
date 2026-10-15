@@ -78,7 +78,7 @@ export default async function EditTenderPage({
         (bids.sealed ? (
           <SealedBids count={bids.count} deadlineAt={bids.deadlineAt} />
         ) : (
-          <Comparison v={comparisonView(tender, bids)} />
+          <Comparison v={comparisonView(tender, bids, user.role === "admin")} />
         ))}
 
       <div className="max-w-[860px]">
@@ -169,6 +169,7 @@ function comparisonView(
     _count: { rebidInvites: number };
   },
   bids: Extract<StaffBids, { sealed: false }>,
+  isAdmin: boolean,
 ): ComparisonView {
   const round2 = bids.round2 && !bids.round2.sealed ? bids.round2.bids : [];
   const cmp = compareBids(bids.bids, round2);
@@ -208,7 +209,8 @@ function comparisonView(
     bestVsBudget: bestVsBudget !== null ? `${pct(bestVsBudget)} ${bestVsBudget <= 0 ? "(в бюджете)" : "(выше бюджета)"}` : null,
     spread: cmp.spreadPct !== null ? pct(cmp.spreadPct) : null,
     canRebid: tender.status === "closed" && !tender.rebidDeadlineAt && cmp.rows.length > 0,
-    canChooseWinner: tender.status === "closed" && cmp.rows.length > 0,
+    canChooseWinner: isAdmin && tender.status === "closed" && cmp.rows.length > 0,
+    winnerByAdminOnly: !isAdmin && tender.status === "closed" && cmp.rows.length > 0,
     rebid: bids.round2
       ? { deadline: formatDateTime(bids.round2.deadlineAt!), invited: tender._count.rebidInvites, sealed: bids.round2.sealed, count: bids.round2.count }
       : null,

@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireStaffPage } from "@/lib/access";
+import { requireAdminPage } from "@/lib/access";
 import { btnPrimary, cardCls } from "@/components/ui";
 
 export default async function AdminContactsPage() {
-  await requireStaffPage();
+  await requireAdminPage();
   const contacts = await prisma.contact.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
 
   return (

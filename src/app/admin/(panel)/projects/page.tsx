@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireStaffPage } from "@/lib/access";
+import { requireAdminPage } from "@/lib/access";
 import { btnPrimary, cardCls } from "@/components/ui";
 
 export default async function AdminProjectsPage() {
-  await requireStaffPage();
+  await requireAdminPage();
   const projects = await prisma.project.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: { _count: { select: { tenders: true } } },

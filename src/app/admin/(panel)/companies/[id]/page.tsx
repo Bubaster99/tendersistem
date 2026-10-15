@@ -11,7 +11,8 @@ import { updateCompanyAction } from "../actions";
 
 /** Карточка подрядчика: реквизиты, анкета, история участия, статус и рейтинг. */
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaffPage();
+  const user = await requireStaffPage();
+  const isAdmin = user.role === "admin";
   const { id } = await params;
   const c = await getCompany(id);
   if (!c) notFound();
@@ -38,29 +39,36 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         Проверить по ИНН <ExternalLink size={14} strokeWidth={1.75} />
       </a>
 
-      <ActionForm action={updateCompanyAction.bind(null, c.id)} className={`${cardCls} mt-5 flex flex-wrap items-end gap-4 p-5`}>
-        <Field label="Статус">
-          <select name="status" defaultValue={c.status} className={`${inputCls} w-auto`}>
-            {Object.entries(COMPANY_STATUS_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Рейтинг (после работ)">
-          <select name="rating" defaultValue={c.rating ?? ""} className={`${inputCls} w-auto`}>
-            <option value="">Нет</option>
-            {[1, 2, 3, 4, 5].map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <button className={btnPrimary}>Сохранить</button>
-        <p className="w-full text-sm text-muted">«Проверен» — в сравнении КП компания помечается «работал с нами». «Заблокирован» — компания не сможет войти на площадку.</p>
-      </ActionForm>
+      {isAdmin ? (
+        <ActionForm action={updateCompanyAction.bind(null, c.id)} className={`${cardCls} mt-5 flex flex-wrap items-end gap-4 p-5`}>
+          <Field label="Статус">
+            <select name="status" defaultValue={c.status} className={`${inputCls} w-auto`}>
+              {Object.entries(COMPANY_STATUS_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Рейтинг (после работ)">
+            <select name="rating" defaultValue={c.rating ?? ""} className={`${inputCls} w-auto`}>
+              <option value="">Нет</option>
+              {[1, 2, 3, 4, 5].map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button className={btnPrimary}>Сохранить</button>
+          <p className="w-full text-sm text-muted">«Проверен» — в сравнении КП компания помечается «работал с нами». «Заблокирован» — компания не сможет войти на площадку.</p>
+        </ActionForm>
+      ) : (
+        <p className={`${cardCls} mt-5 p-5 text-sm`}>
+          Статус: <b>{COMPANY_STATUS_LABEL[c.status]}</b> · Рейтинг: <b>{c.rating ?? "нет"}</b>
+          <span className="mt-1 block text-muted">Статус и рейтинг меняет администратор.</span>
+        </p>
+      )}
 
       <dl className={`${cardCls} mt-5 grid gap-x-6 gap-y-2 p-5 text-sm sm:grid-cols-[220px_1fr]`}>
         {facts.map(([k, v]) => (

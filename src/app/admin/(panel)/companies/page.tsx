@@ -28,7 +28,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
           <FileSpreadsheet size={18} strokeWidth={1.75} /> Скачать в Excel
         </a>
       </div>
-      <p className="mt-2 text-muted">Все зарегистрированные компании. Статус и рейтинг меняются в карточке компании.</p>
+      <p className="mt-2 text-muted">Все зарегистрированные компании. Статус и рейтинг меняет администратор в карточке компании.</p>
 
       <form className={`${cardCls} mt-5 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_170px_150px_auto]`}>
         <input name="q" defaultValue={f.q ?? ""} placeholder="Название или ИНН" className={inputCls} aria-label="Поиск" />

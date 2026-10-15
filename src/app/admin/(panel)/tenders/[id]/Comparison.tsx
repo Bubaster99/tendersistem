@@ -37,6 +37,7 @@ export type ComparisonView = {
   spread: string | null;
   canRebid: boolean;
   canChooseWinner: boolean;
+  winnerByAdminOnly: boolean; // снабженцу: победителя выбирает администратор
   rebid: { deadline: string; invited: number; sealed: boolean; count: number } | null;
   winnerName: string | null;
   defaultDocuments: string;
@@ -177,6 +178,9 @@ export function Comparison({ v }: { v: ComparisonView }) {
 
       {v.canRebid && mode === "none" && picked.length === 0 && (
         <p className="mt-4 text-sm text-muted">Для переторжки отметьте участников галочками в таблице.</p>
+      )}
+      {v.winnerByAdminOnly && mode === "none" && (
+        <p className="mt-3 text-sm text-muted">Победителя выбирает администратор.</p>
       )}
       {(v.canRebid || v.canChooseWinner) && mode === "none" && (
         <div className="mt-3 flex flex-wrap gap-3">

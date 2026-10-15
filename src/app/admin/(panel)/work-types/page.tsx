@@ -1,12 +1,12 @@
 import { Trash2 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { requireStaffPage } from "@/lib/access";
+import { requireAdminPage } from "@/lib/access";
 import { ActionForm } from "@/components/ActionForm";
 import { btnPrimary, btnSecondary, cardCls, inputCls } from "@/components/ui";
 import { deleteWorkType, saveWorkType } from "./actions";
 
 export default async function AdminWorkTypesPage() {
-  await requireStaffPage();
+  await requireAdminPage();
   const [workTypes, contacts] = await Promise.all([
     prisma.workType.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { tenders: true } } } }),
     prisma.contact.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } }),

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { requireStaffAction } from "@/lib/access";
+import { requireAdminAction, requireStaffAction } from "@/lib/access";
 import { chooseWinner, saveBudget, startRebid } from "@/lib/award";
 import { parseMoney } from "@/lib/bid-rules";
 import { str } from "@/lib/form";
@@ -36,7 +36,7 @@ export async function startRebidAction(tenderId: string, fd: FormData): Promise<
 
 /** «Выбрать победителя»: письмо победителю со списком документов, остальным — «выбран другой участник». */
 export async function chooseWinnerAction(tenderId: string, fd: FormData): Promise<ActionResult> {
-  const user = await requireStaffAction();
+  const user = await requireAdminAction();
   const companyId = str(fd, "winner", 50);
   if (!companyId) return { error: "Выберите победителя" };
   const documents = (str(fd, "documents", 5000) ?? "")

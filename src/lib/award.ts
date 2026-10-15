@@ -56,7 +56,8 @@ export async function startRebid(viewer: Viewer, tenderId: string, companyIds: s
 
 /** Выбор победителя: после окончания приёма (и переторжки, если была), из участников. Тендер → «Победитель выбран». */
 export async function chooseWinner(viewer: Viewer, tenderId: string, companyId: string, now: Date = new Date()): Promise<Result> {
-  if (!isStaffRole(viewer.role)) return { error: "Нет доступа" };
+  // Решение с деньгами и письмами всем участникам — только администратор (решение владельца).
+  if (viewer.role !== "admin") return { error: "Выбрать победителя может только администратор" };
   await closeExpiredTenders(now);
   const tender = await prisma.tender.findUnique({ where: { id: tenderId }, select: { status: true, deadlineAt: true } });
   if (!tender) return { error: "Тендер не найден" };

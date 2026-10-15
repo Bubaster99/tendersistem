@@ -8,12 +8,12 @@ import { staffLogout } from "../login/actions";
 const NAV = [
   { href: "/admin/tenders", label: "Тендеры" },
   { href: "/admin/companies", label: "Подрядчики" },
+];
+// Только для администратора: справочники, сотрудники, журнал.
+const ADMIN_NAV = [
   { href: "/admin/projects", label: "Объекты" },
   { href: "/admin/work-types", label: "Виды работ" },
   { href: "/admin/contacts", label: "Контакты" },
-];
-// Только для администратора.
-const ADMIN_NAV = [
   { href: "/admin/staff", label: "Сотрудники" },
   { href: "/admin/journal", label: "Журнал" },
 ];

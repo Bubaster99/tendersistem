@@ -5,7 +5,6 @@ import ExcelJS from "exceljs";
 import type { CompanyStatus, Prisma, UserRole } from "@prisma/client";
 import { prisma } from "./db";
 import { writeAudit } from "./audit";
-import { isStaffRole } from "./access-rules";
 import { STATUS_LABEL_ADMIN } from "./tenders";
 import { formatDay } from "./time";
 
@@ -120,7 +119,7 @@ export async function updateCompany(
   id: string,
   input: { status: string; rating: number | null },
 ): Promise<{ error: string } | { ok: true }> {
-  if (!isStaffRole(actor.role)) return { error: "Нет доступа" };
+  if (actor.role !== "admin") return { error: "Статус и рейтинг меняет только администратор" };
   if (!(STATUSES as string[]).includes(input.status)) return { error: "Выберите статус" };
   if (input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) return { error: "Рейтинг — от 1 до 5" };
   const before = await prisma.company.findUnique({ where: { id }, select: { name: true, status: true, rating: true } });

@@ -71,11 +71,12 @@ describe.skipIf(!hasDb)("Сотрудники, реестр, журнал (на�
     for (const data of [JSON.stringify(byInn), JSON.stringify(card)]) expect(data).not.toContain("8765432");
   });
 
-  it("статус и рейтинг: только снабжение, рейтинг 1–5; изменение — в журнал", async () => {
+  it("статус и рейтинг: только администратор, рейтинг 1–5; изменение — в журнал", async () => {
     expect(await companies.updateCompany(contractor, companyId, { status: "checked", rating: 5 })).toHaveProperty("error");
-    expect(await companies.updateCompany(buyer, companyId, { status: "checked", rating: 6 })).toHaveProperty("error");
-    expect(await companies.updateCompany(buyer, companyId, { status: "unknown", rating: 3 })).toHaveProperty("error");
-    expect(await companies.updateCompany(buyer, companyId, { status: "checked", rating: 4 })).toEqual({ ok: true });
+    expect(await companies.updateCompany(buyer, companyId, { status: "checked", rating: 4 })).toHaveProperty("error"); // снабженцу — нельзя
+    expect(await companies.updateCompany(admin, companyId, { status: "checked", rating: 6 })).toHaveProperty("error");
+    expect(await companies.updateCompany(admin, companyId, { status: "unknown", rating: 3 })).toHaveProperty("error");
+    expect(await companies.updateCompany(admin, companyId, { status: "checked", rating: 4 })).toEqual({ ok: true });
     const c = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
     expect([c.status, c.rating]).toEqual(["checked", 4]);
     expect((await companies.listCompanies({ status: "checked", rating: "4", q: uniq })).map((x) => x.id)).toEqual([companyId]);

@@ -176,7 +176,7 @@ describe.skipIf(!hasDb)("Переторжка и победитель (наст�
   });
 
   it("победителя нельзя выбрать во время переторжки", async () => {
-    expect(await award.chooseWinner(buyer, tenderId, user.A.companyId!, new Date(t1.getTime() + 3600_000))).toHaveProperty("error");
+    expect(await award.chooseWinner(admin, tenderId, user.A.companyId!, new Date(t1.getTime() + 3600_000))).toHaveProperty("error");
   });
 
   it("после срока переторжки: тендер «Приём закрыт», оба раунда видны, снабжению — «Переторжка завершена»", async () => {
@@ -217,11 +217,12 @@ describe.skipIf(!hasDb)("Переторжка и победитель (наст�
     expect(await prisma.auditLog.count({ where: { action: "bid.export", details: { contains: tenderId } } })).toBeGreaterThan(0);
   });
 
-  it("выбор победителя: только из участников, один раз; итоги — всем участникам", async () => {
+  it("выбор победителя: только администратор, только из участников, один раз; итоги — всем участникам", async () => {
     expect(await award.chooseWinner(user.A, tenderId, user.B.companyId!, t2)).toHaveProperty("error");
-    expect(await award.chooseWinner(buyer, tenderId, user.D.companyId!, t2)).toHaveProperty("error");
-    expect(await award.chooseWinner(buyer, tenderId, user.B.companyId!, t2)).toEqual({ ok: true });
-    expect(await award.chooseWinner(buyer, tenderId, user.A.companyId!, t2)).toHaveProperty("error");
+    expect(await award.chooseWinner(buyer, tenderId, user.B.companyId!, t2)).toHaveProperty("error"); // снабженцу — нельзя
+    expect(await award.chooseWinner(admin, tenderId, user.D.companyId!, t2)).toHaveProperty("error");
+    expect(await award.chooseWinner(admin, tenderId, user.B.companyId!, t2)).toEqual({ ok: true });
+    expect(await award.chooseWinner(admin, tenderId, user.A.companyId!, t2)).toHaveProperty("error");
     const t = await prisma.tender.findUniqueOrThrow({ where: { id: tenderId } });
     expect(t.status).toBe("awarded");
     expect(t.winnerCompanyId).toBe(user.B.companyId);
