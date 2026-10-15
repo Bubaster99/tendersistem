@@ -32,14 +32,21 @@ export async function issueLoginCode(email: string): Promise<{ ok: true } | Fail
 
   const code = generateCode();
   // Старые коды этого email больше не действуют.
-  await prisma.$transaction([
+  const [, created] = await prisma.$transaction([
     prisma.loginCode.updateMany({ where: { email, expiresAt: { gt: new Date(now) } }, data: { expiresAt: new Date(now) } }),
     prisma.loginCode.create({
       data: { email, codeHash: hashCode(email, code), expiresAt: new Date(now + CODE_TTL_MS) },
     }),
   ]);
 
-  await sendMail({ to: email, ...loginCodeEmail(code) });
+  try {
+    await sendMail({ to: email, ...loginCodeEmail(code) });
+  } catch (e) {
+    // Письмо не ушло — код бесполезен: гасим его и честно говорим об ошибке, а не молчим.
+    console.error(`Код входа не отправлен (${email}):`, e);
+    await prisma.loginCode.delete({ where: { id: created.id } });
+    return { ok: false, error: "Не удалось отправить письмо с кодом. Попробуйте через несколько минут или напишите в поддержку" };
+  }
   return { ok: true };
 }
 

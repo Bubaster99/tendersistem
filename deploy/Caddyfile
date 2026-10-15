@@ -1,0 +1,24 @@
+# Caddy сам получает и продлевает бесплатный сертификат HTTPS для домена из .env (DOMAIN).
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Документы тендера загружают в админке — до 200 МБ. Остальным запросам (КП — до 20 МБ) хватит 25 МБ.
+	@admin path /admin /admin/*
+	handle @admin {
+		request_body {
+			max_size 210MB
+		}
+		reverse_proxy app:3000
+	}
+	handle {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy app:3000
+	}
+}

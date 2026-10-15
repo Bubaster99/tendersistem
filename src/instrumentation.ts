@@ -6,7 +6,8 @@ export async function register() {
     const problems = productionConfigProblems();
     if (problems.length) {
       // Не запускаемся с небезопасными настройками — понятное сообщение в журнале контейнера.
-      throw new Error(`Рабочий сервер не запущен: исправьте .env\n- ${problems.join("\n- ")}`);
+      console.error(`\nРабочий сервер не запущен: исправьте .env\n- ${problems.join("\n- ")}\n`);
+      process.exit(1);
     }
   }
   const { startScheduler } = await import("./lib/scheduler");

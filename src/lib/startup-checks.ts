@@ -12,6 +12,9 @@ export function productionConfigProblems(env: Record<string, string | undefined>
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASSWORD || !env.SMTP_FROM) {
     problems.push("SMTP_HOST, SMTP_USER, SMTP_PASSWORD, SMTP_FROM — без почты подрядчики не получат код входа");
   }
+  if (!env.DADATA_API_KEY) {
+    problems.push("DADATA_API_KEY — без ключа DaData любой ИНН регистрировался бы как тестовая «ООО Тестстрой»");
+  }
   if (!env.APP_URL?.startsWith("https://")) problems.push("APP_URL — адрес сайта с https://, например https://tender.example.ru");
   return problems;
 }

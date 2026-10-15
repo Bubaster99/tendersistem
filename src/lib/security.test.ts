@@ -11,6 +11,7 @@ describe("Настройки рабочего сервера", () => {
     SMTP_PASSWORD: "p",
     SMTP_FROM: "Площадка <noreply@x.ru>",
     APP_URL: "https://tender.x.ru",
+    DADATA_API_KEY: "key",
   };
 
   it("правильные настройки — без замечаний", () => {
@@ -22,6 +23,11 @@ describe("Настройки рабочего сервера", () => {
     expect(productionConfigProblems({ ...good, AUTH_SECRET: "short" })).toHaveLength(1);
     expect(productionConfigProblems({ ...good, SMTP_HOST: "" })).toHaveLength(1);
     expect(productionConfigProblems({ ...good, APP_URL: "http://tender.x.ru" })).toHaveLength(1);
+    expect(productionConfigProblems({ ...good, DADATA_API_KEY: "" })).toHaveLength(1); // иначе реквизиты — тестовые
+  });
+
+  it("все проблемы перечисляются сразу, а не по одной", () => {
+    expect(productionConfigProblems({})).toHaveLength(4);
   });
 });
 
