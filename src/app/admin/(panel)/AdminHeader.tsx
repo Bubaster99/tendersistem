@@ -7,13 +7,20 @@ import { staffLogout } from "../login/actions";
 
 const NAV = [
   { href: "/admin/tenders", label: "Тендеры" },
+  { href: "/admin/companies", label: "Подрядчики" },
   { href: "/admin/projects", label: "Объекты" },
   { href: "/admin/work-types", label: "Виды работ" },
   { href: "/admin/contacts", label: "Контакты" },
 ];
+// Только для администратора.
+const ADMIN_NAV = [
+  { href: "/admin/staff", label: "Сотрудники" },
+  { href: "/admin/journal", label: "Журнал" },
+];
 
-export function AdminHeader({ email }: { email: string }) {
+export function AdminHeader({ email, isAdmin }: { email: string; isAdmin: boolean }) {
   const pathname = usePathname();
+  const nav = isAdmin ? [...NAV, ...ADMIN_NAV] : NAV;
   const link = (active: boolean) =>
     `shrink-0 rounded-[10px] px-3 py-2 text-[15px] transition ${active ? "bg-accent-soft text-accent" : "text-white/85 hover:bg-white/10"}`;
 
@@ -25,7 +32,7 @@ export function AdminHeader({ email }: { email: string }) {
           <span className="font-display text-[15px] leading-tight">Снабжение</span>
         </Link>
         <nav className="order-3 flex w-full flex-wrap gap-1 md:order-none md:w-auto">
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <Link key={n.href} href={n.href} className={link(pathname.startsWith(n.href))}>
               {n.label}
             </Link>

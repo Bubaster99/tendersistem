@@ -32,3 +32,17 @@ export async function requireUserAction() {
   if (!user) throw new Error("Нужно войти");
   return user;
 }
+
+/** Страницы только для администратора (сотрудники, журнал). Снабженца — на главную админки. */
+export async function requireAdminPage() {
+  const user = await requireStaffPage();
+  if (user.role !== "admin") redirect("/admin");
+  return user;
+}
+
+/** Действия только для администратора. */
+export async function requireAdminAction() {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") throw new Error("Нет доступа");
+  return user;
+}

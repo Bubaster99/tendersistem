@@ -8,11 +8,13 @@ import { prisma } from "@/lib/db";
 import { requireStaffAction } from "@/lib/access";
 import { closeExpiredTenders } from "@/lib/bids";
 import { checkDocument } from "@/lib/files";
+import { writeAudit } from "@/lib/audit";
+import { clientIp } from "@/lib/request-ip";
 import { sendTenderOpenedNotices } from "@/lib/notify";
 import { decimal, file, str } from "@/lib/form";
 import { removeFile, saveUpload } from "@/lib/storage";
 import { parseMoscowInput } from "@/lib/time";
-import { DOCUMENT_KIND_ORDER } from "@/lib/tenders";
+import { DOCUMENT_KIND_ORDER, STATUS_LABEL_ADMIN } from "@/lib/tenders";
 import type { ActionResult } from "@/components/ActionForm";
 
 type Intent = "save" | "draft" | "planned" | "open";
@@ -106,6 +108,9 @@ export async function saveTender(id: string | null, fd: FormData): Promise<Actio
   if (status === "open") after(() => sendTenderOpenedNotices());
   if (existing) {
     await prisma.tender.update({ where: { id: existing.id }, data });
+    if (existing.status !== status || (!existing.publishedAt && publishedAt)) {
+      await writeAudit(user, "tender.status", "tender", existing.id, `${existing.publishedAt ? STATUS_LABEL_ADMIN[existing.status] : "Черновик"} → ${STATUS_LABEL_ADMIN[status]}`, await clientIp());
+    }
     const msg: Record<Intent, string> = {
       save: "Сохранено",
       draft: "Черновик сохранён",
@@ -115,6 +120,7 @@ export async function saveTender(id: string | null, fd: FormData): Promise<Actio
     return { message: msg[intent] };
   }
   const created = await prisma.tender.create({ data: { ...data, createdById: user.id } });
+  if (publishedAt) await writeAudit(user, "tender.status", "tender", created.id, `Создан: ${STATUS_LABEL_ADMIN[status]}`, await clientIp());
   redirect(`/admin/tenders/${created.id}?created=1`);
 }
 
