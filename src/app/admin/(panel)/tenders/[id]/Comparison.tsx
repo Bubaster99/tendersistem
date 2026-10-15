@@ -46,6 +46,8 @@ export function Comparison({ v }: { v: ComparisonView }) {
   const [mode, setMode] = useState<"none" | "rebid" | "winner">("none");
   const [picked, setPicked] = useState<string[]>([]);
   const hasRound2 = v.rebid !== null;
+  // Галочки для переторжки видны всегда, пока её можно начать.
+  const showPick = v.canRebid && mode !== "winner";
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   return (
@@ -96,7 +98,11 @@ export function Comparison({ v }: { v: ComparisonView }) {
           <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="border-b border-line text-muted">
               <tr>
-                {mode === "rebid" && <th className="w-10 px-3 py-3" />}
+                {showPick && (
+                  <th className="w-12 px-3 py-3 text-xs font-normal" title="Отметьте участников переторжки">
+                    Пере&shy;торжка
+                  </th>
+                )}
                 <th className="px-3 py-3 font-normal">Участник</th>
                 {hasRound2 && <th className="px-3 py-3 font-normal">Раунд 1</th>}
                 {hasRound2 && <th className="px-3 py-3 font-normal">Раунд 2</th>}
@@ -113,7 +119,7 @@ export function Comparison({ v }: { v: ComparisonView }) {
                 const file = r.r2 ?? r.r1;
                 return (
                   <tr key={r.companyId} className={i === 0 ? "bg-open-bg/40" : ""}>
-                    {mode === "rebid" && (
+                    {showPick && (
                       <td className="px-3 py-3 align-top">
                         <input
                           type="checkbox"
@@ -169,11 +175,14 @@ export function Comparison({ v }: { v: ComparisonView }) {
         </div>
       )}
 
+      {v.canRebid && mode === "none" && picked.length === 0 && (
+        <p className="mt-4 text-sm text-muted">Для переторжки отметьте участников галочками в таблице.</p>
+      )}
       {(v.canRebid || v.canChooseWinner) && mode === "none" && (
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mt-3 flex flex-wrap gap-3">
           {v.canRebid && (
-            <button type="button" onClick={() => setMode("rebid")} className={btnSecondary}>
-              <Repeat size={18} strokeWidth={1.75} /> Переторжка с отмеченными
+            <button type="button" onClick={() => setMode("rebid")} disabled={picked.length === 0} className={btnSecondary}>
+              <Repeat size={18} strokeWidth={1.75} /> Переторжка с отмеченными{picked.length > 0 ? ` (${picked.length})` : ""}
             </button>
           )}
           {v.canChooseWinner && (
