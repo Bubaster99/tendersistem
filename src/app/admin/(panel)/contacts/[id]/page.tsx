@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireStaffPage } from "@/lib/access";
+import { requireAdminPage } from "@/lib/access";
 import { ContactForm } from "../ContactForm";
 
 export default async function EditContactPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaffPage();
+  await requireAdminPage();
   const { id } = await params;
   const contact = await prisma.contact.findUnique({ where: { id } });
   if (!contact) notFound();

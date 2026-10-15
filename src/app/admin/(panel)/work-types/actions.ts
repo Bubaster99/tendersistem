@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
-import { requireStaffAction } from "@/lib/access";
+import { requireAdminAction } from "@/lib/access";
 import { str } from "@/lib/form";
 import type { ActionResult } from "@/components/ActionForm";
 
@@ -11,7 +11,7 @@ async function checkContact(id: string | null): Promise<boolean> {
 }
 
 export async function saveWorkType(id: string | null, fd: FormData): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
   const name = str(fd, "name", 200);
   if (!name) return { error: "Укажите название" };
   const responsibleContactId = str(fd, "responsibleContactId", 50);
@@ -28,7 +28,7 @@ export async function saveWorkType(id: string | null, fd: FormData): Promise<Act
 }
 
 export async function deleteWorkType(id: string): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
   const used = await prisma.tender.count({ where: { workTypeId: id } });
   if (used > 0) return { error: "По этому виду работ есть тендеры — удалить нельзя" };
   await prisma.workType.deleteMany({ where: { id } });

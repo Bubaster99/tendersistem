@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await requireStaffPage();
   return (
     <>
-      <AdminHeader email={user.email} />
+      <AdminHeader email={user.email} isAdmin={user.role === "admin"} />
       <main className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:py-8">{children}</main>
     </>
   );

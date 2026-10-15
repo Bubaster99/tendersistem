@@ -5,7 +5,7 @@ import "server-only";
 import { Prisma, type UserRole } from "@prisma/client";
 import { prisma } from "./db";
 import { writeAudit } from "./audit";
-import { bidAccess, checkBidFile, checkBidInput, isSealed, submitBlocker, type BidInput } from "./bid-rules";
+import { bidAccess, checkBidFile, checkBidInput, isSealed, roundDeadline, submitRound, type BidInput } from "./bid-rules";
 import { removeFile, saveUpload } from "./storage";
 import { isStaffRole } from "./access-rules";
 import { visibleTenderWhere } from "./tenders";
@@ -17,21 +17,31 @@ const systemClock: Clock = () => new Date();
 const isContractor = (v: Viewer): v is Viewer & { companyId: string } => v.role === "contractor" && !!v.companyId;
 
 /**
- * Автоматический перевод в closed: все открытые тендеры с прошедшим дедлайном.
+ * Автоматический перевод в closed: открытые тендеры с прошедшим дедлайном и переторжки с прошедшим сроком.
  * Вызывается в начале каждого запроса, где важен статус. Возвращает число закрытых.
  */
 export async function closeExpiredTenders(now: Date = new Date()): Promise<number> {
-  const expired = await prisma.tender.findMany({ where: { status: "open", deadlineAt: { lte: now } }, select: { id: true } });
+  const expired = await prisma.tender.findMany({
+    where: { OR: [{ status: "open", deadlineAt: { lte: now } }, { status: "rebid", rebidDeadlineAt: { lte: now } }] },
+    select: { id: true, status: true },
+  });
   let closed = 0;
   for (const t of expired) {
-    // Условие status: "open" — чтобы при одновременных запросах тендер закрылся и попал в журнал один раз.
-    const res = await prisma.tender.updateMany({ where: { id: t.id, status: "open" }, data: { status: "closed" } });
+    // Условие на прежний статус — чтобы при одновременных запросах тендер закрылся и попал в журнал один раз.
+    const res = await prisma.tender.updateMany({ where: { id: t.id, status: t.status }, data: { status: "closed" } });
     if (res.count === 1) {
       closed++;
-      await writeAudit(null, "tender.status", "tender", t.id, "open → closed: срок приёма КП истёк (автоматически)");
+      const why = t.status === "open" ? "срок приёма КП истёк" : "срок переторжки истёк";
+      await writeAudit(null, "tender.status", "tender", t.id, `${t.status} → closed: ${why} (автоматически)`);
     }
   }
   return closed;
+}
+
+/** Приглашена ли компания на переторжку по тендеру. */
+export async function isRebidInvited(companyId: string | null, tenderId: string): Promise<boolean> {
+  if (!companyId) return false;
+  return (await prisma.rebidInvite.count({ where: { tenderId, companyId } })) > 0;
 }
 
 // ---------- Подрядчик: своё КП ----------
@@ -69,7 +79,19 @@ export async function listOwnBids(viewer: Viewer) {
     orderBy: { submittedAt: "desc" },
     select: {
       ...ownBidSelect,
-      tender: { select: { id: true, title: true, status: true, deadlineAt: true, project: { select: { name: true } }, workType: { select: { name: true } } } },
+      tender: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          deadlineAt: true,
+          rebidDeadlineAt: true,
+          winnerCompanyId: true,
+          project: { select: { name: true } },
+          workType: { select: { name: true } },
+          rebidInvites: { where: { companyId: viewer.companyId }, select: { companyId: true } },
+        },
+      },
     },
   });
 }
@@ -85,7 +107,7 @@ export async function ownBidTenderIds(viewer: Viewer): Promise<Set<string>> {
 
 class SubmitRejected extends Error {}
 
-export type SubmitResult = { error: string } | { ok: true; replaced: boolean };
+export type SubmitResult = { error: string } | { ok: true; replaced: boolean; round: 1 | 2 };
 
 /**
  * Подать или заменить КП. Все проверки — здесь, на сервере:
@@ -102,10 +124,16 @@ export async function submitBid(
 ): Promise<SubmitResult> {
   if (!isContractor(viewer)) return { error: "Подавать КП могут только подрядчики" };
 
-  const tender = await prisma.tender.findFirst({ where: { id: tenderId, ...visibleTenderWhere }, select: { id: true, status: true, deadlineAt: true } });
+  const tender = await prisma.tender.findFirst({
+    where: { id: tenderId, ...visibleTenderWhere },
+    select: { id: true, status: true, deadlineAt: true, rebidDeadlineAt: true },
+  });
   if (!tender) return { error: "Тендер не найден" };
-  const blocked = submitBlocker(tender, clock());
-  if (blocked) return { error: blocked };
+  // Раунд определяет сервер: открытый приём — 1, переторжка — 2 (только приглашённым).
+  const invited = await isRebidInvited(viewer.companyId, tenderId);
+  const allowed = submitRound(tender, clock(), invited);
+  if ("error" in allowed) return { error: allowed.error };
+  const round = allowed.round;
 
   const badInput = checkBidInput(input);
   if (badInput) return { error: badInput };
@@ -131,11 +159,13 @@ export async function submitBid(
   try {
     await prisma.$transaction(async (tx) => {
       // Повторная проверка срока прямо перед записью: файл мог загружаться долго.
-      const fresh = await tx.tender.findUnique({ where: { id: tenderId }, select: { status: true, deadlineAt: true } });
-      const late = fresh ? submitBlocker(fresh, clock()) : "Тендер не найден";
-      if (late) throw new SubmitRejected(late);
+      const fresh = await tx.tender.findUnique({ where: { id: tenderId }, select: { status: true, deadlineAt: true, rebidDeadlineAt: true } });
+      if (!fresh) throw new SubmitRejected("Тендер не найден");
+      const again = submitRound(fresh, clock(), invited);
+      if ("error" in again) throw new SubmitRejected(again.error);
+      if (again.round !== round) throw new SubmitRejected("Статус тендера изменился. Обновите страницу");
 
-      const key = { tenderId, companyId: viewer.companyId, round: 1 };
+      const key = { tenderId, companyId: viewer.companyId, round };
       const existing = await tx.bid.findUnique({ where: { tenderId_companyId_round: key } });
       const at = clock();
       if (existing) {
@@ -171,18 +201,38 @@ export async function submitBid(
   }
 
   // В журнал — без суммы.
-  await writeAudit(viewer, replaced ? "bid.replace" : "bid.submit", "bid", bidId, `Тендер ${tenderId}, файл «${fileName}»`, ip);
-  return { ok: true, replaced };
+  await writeAudit(viewer, replaced ? "bid.replace" : "bid.submit", "bid", bidId, `Тендер ${tenderId}, раунд ${round}, файл «${fileName}»`, ip);
+  return { ok: true, replaced, round };
 }
 
 // ---------- Снабжение ----------
 
-/** Количество КП по тендерам — единственное, что снабжение видит до дедлайна. */
+/** Количество участников (КП основного раунда) по тендерам — единственное, что снабжение видит до дедлайна. */
 export async function bidCounts(tenderIds: string[]): Promise<Map<string, number>> {
   if (tenderIds.length === 0) return new Map();
-  const rows = await prisma.bid.groupBy({ by: ["tenderId"], where: { tenderId: { in: tenderIds }, isWithdrawn: false }, _count: { _all: true } });
+  const rows = await prisma.bid.groupBy({
+    by: ["tenderId"],
+    where: { tenderId: { in: tenderIds }, isWithdrawn: false, round: 1 },
+    _count: { _all: true },
+  });
   return new Map(rows.map((r) => [r.tenderId, r._count._all]));
 }
+
+export type StaffBid = {
+  id: string;
+  companyId: string;
+  round: number;
+  company: { name: string; inn: string; status: "new" | "checked" | "blocked"; rating: number | null; workedWithUs: boolean; invited: boolean };
+  fileName: string;
+  fileSize: number;
+  totalWithVat: Prisma.Decimal;
+  durationDays: number;
+  advancePercent: Prisma.Decimal;
+  comment: string | null;
+  submittedAt: Date;
+  replacedAt: Date | null;
+  versions: number;
+};
 
 export type StaffBids =
   | { sealed: true; count: number; deadlineAt: Date | null }
@@ -190,59 +240,104 @@ export type StaffBids =
       sealed: false;
       count: number;
       deadlineAt: Date | null;
-      bids: {
-        id: string;
-        company: { name: string; inn: string };
-        fileName: string;
-        fileSize: number;
-        totalWithVat: Prisma.Decimal;
-        durationDays: number;
-        advancePercent: Prisma.Decimal;
-        comment: string | null;
-        submittedAt: Date;
-        replacedAt: Date | null;
-        versions: number;
-      }[];
+      bids: StaffBid[]; // основной раунд, по возрастанию суммы
+      // Переторжка: пока срок не прошёл — только количество, как и в основном раунде.
+      round2: { sealed: true; count: number; deadlineAt: Date | null } | { sealed: false; count: number; deadlineAt: Date | null; bids: StaffBid[] } | null;
     };
 
+const staffBidSelect = {
+  id: true,
+  companyId: true,
+  round: true,
+  fileName: true,
+  fileSize: true,
+  totalWithVat: true,
+  durationDays: true,
+  advancePercent: true,
+  comment: true,
+  submittedAt: true,
+  replacedAt: true,
+  company: { select: { name: true, inn: true, status: true, rating: true } },
+  _count: { select: { versions: true } },
+} satisfies Prisma.BidSelect;
+
 /**
- * КП по тендеру для снабжения. До дедлайна — только количество (суммы даже не запрашиваются из базы).
- * После — список; каждый просмотр пишется в журнал.
+ * КП по тендеру для снабжения. До дедлайна раунда — только количество (суммы даже не запрашиваются из базы).
+ * После — список; каждый просмотр пишется в журнал (action — для выгрузки в Excel своё название).
  */
-export async function staffTenderBids(viewer: Viewer, tenderId: string, ip: string | null = null, now: Date = new Date()): Promise<StaffBids | null> {
+export async function staffTenderBids(
+  viewer: Viewer,
+  tenderId: string,
+  ip: string | null = null,
+  now: Date = new Date(),
+  action = "bid.view",
+): Promise<StaffBids | null> {
   if (!isStaffRole(viewer.role)) return null;
-  const tender = await prisma.tender.findUnique({ where: { id: tenderId }, select: { deadlineAt: true } });
+  const tender = await prisma.tender.findUnique({
+    where: { id: tenderId },
+    select: { deadlineAt: true, rebidDeadlineAt: true, rebidInvites: { select: { companyId: true } } },
+  });
   if (!tender) return null;
-  const count = await prisma.bid.count({ where: { tenderId, isWithdrawn: false } });
+  const active = { tenderId, isWithdrawn: false };
+  const count = await prisma.bid.count({ where: { ...active, round: 1 } });
   if (isSealed(tender.deadlineAt, now)) return { sealed: true, count, deadlineAt: tender.deadlineAt };
 
+  const invited = new Set(tender.rebidInvites.map((i) => i.companyId));
+  const round2Sealed = tender.rebidDeadlineAt !== null && isSealed(tender.rebidDeadlineAt, now);
+  // Суммы раунда 2 до срока переторжки из базы не запрашиваем.
   const rows = await prisma.bid.findMany({
-    where: { tenderId, isWithdrawn: false },
+    where: { ...active, ...(round2Sealed || tender.rebidDeadlineAt === null ? { round: 1 } : {}) },
     orderBy: { totalWithVat: "asc" },
-    select: {
-      id: true,
-      fileName: true,
-      fileSize: true,
-      totalWithVat: true,
-      durationDays: true,
-      advancePercent: true,
-      comment: true,
-      submittedAt: true,
-      replacedAt: true,
-      company: { select: { name: true, inn: true } },
-      _count: { select: { versions: true } },
-    },
+    select: staffBidSelect,
   });
+
+  // «Работал с нами»: снабжение отметило компанию как проверенную или она уже выигрывала у нас тендер.
+  const companyIds = [...new Set(rows.map((r) => r.companyId))];
+  const winners = await prisma.tender.findMany({
+    where: { winnerCompanyId: { in: companyIds }, id: { not: tenderId } },
+    select: { winnerCompanyId: true },
+  });
+  const won = new Set(winners.map((w) => w.winnerCompanyId));
+
   if (rows.length > 0) {
     await prisma.auditLog.createMany({
-      data: rows.map((b) => ({ userId: viewer.id, userEmail: viewer.email, action: "bid.view", entity: "bid", entityId: b.id, details: `Тендер ${tenderId}`, ip })),
+      data: rows.map((b) => ({
+        userId: viewer.id,
+        userEmail: viewer.email,
+        action,
+        entity: "bid",
+        entityId: b.id,
+        details: `Тендер ${tenderId}, раунд ${b.round}`,
+        ip,
+      })),
     });
+  }
+  const view = (b: (typeof rows)[number]): StaffBid => {
+    const { _count, company, ...rest } = b;
+    return {
+      ...rest,
+      company: {
+        ...company,
+        workedWithUs: company.status === "checked" || won.has(b.companyId),
+        invited: invited.has(b.companyId),
+      },
+      versions: _count.versions,
+    };
+  };
+
+  let round2: Extract<StaffBids, { sealed: false }>["round2"] = null;
+  if (tender.rebidDeadlineAt) {
+    const count2 = await prisma.bid.count({ where: { ...active, round: 2 } });
+    round2 = round2Sealed
+      ? { sealed: true, count: count2, deadlineAt: tender.rebidDeadlineAt }
+      : { sealed: false, count: count2, deadlineAt: tender.rebidDeadlineAt, bids: rows.filter((r) => r.round === 2).map(view) };
   }
   return {
     sealed: false,
     count,
     deadlineAt: tender.deadlineAt,
-    bids: rows.map(({ _count, ...b }) => ({ ...b, versions: _count.versions })),
+    bids: rows.filter((r) => r.round === 1).map(view),
+    round2,
   };
 }
 
@@ -255,10 +350,20 @@ export async function staffTenderBids(viewer: Viewer, tenderId: string, ip: stri
 export async function bidFileForDownload(viewer: Viewer, bidId: string, ip: string | null = null, now: Date = new Date()) {
   const bid = await prisma.bid.findUnique({
     where: { id: bidId },
-    select: { id: true, companyId: true, isWithdrawn: true, fileKey: true, fileName: true, fileSize: true, tender: { select: { id: true, deadlineAt: true } } },
+    select: {
+      id: true,
+      round: true,
+      companyId: true,
+      isWithdrawn: true,
+      fileKey: true,
+      fileName: true,
+      fileSize: true,
+      tender: { select: { id: true, deadlineAt: true, rebidDeadlineAt: true } },
+    },
   });
   if (!bid || bid.isWithdrawn) return null;
-  if (bidAccess(viewer, bid.companyId, bid.tender.deadlineAt, now) === "denied") return null;
+  // КП переторжки запечатаны до срока переторжки, основные — до основного дедлайна.
+  if (bidAccess(viewer, bid.companyId, roundDeadline(bid.tender, bid.round), now) === "denied") return null;
   await writeAudit(viewer, "bid.download", "bid", bid.id, `Тендер ${bid.tender.id}, файл «${bid.fileName}»`, ip);
   return { fileKey: bid.fileKey, fileName: bid.fileName, fileSize: bid.fileSize };
 }

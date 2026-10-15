@@ -55,8 +55,8 @@ export function tenderOpenedEmail(t: TenderInfo, reason: "subscription" | "watch
 }
 
 /** Подтверждение приёма или замены КП. Сумму в письмо не пишем. */
-export function bidAcceptedEmail(t: TenderInfo, bid: { fileName: string; at: Date; replaced: boolean }): EmailContent {
-  const what = bid.replaced ? "КП заменено" : "КП принято";
+export function bidAcceptedEmail(t: TenderInfo, bid: { fileName: string; at: Date; replaced: boolean; round?: number }): EmailContent {
+  const what = `${bid.replaced ? "КП заменено" : "КП принято"}${bid.round === 2 ? " (переторжка)" : ""}`;
   return renderEmail({
     subject: `${what}: ${t.title}`,
     title: what,
@@ -163,10 +163,11 @@ export function staffNewCompanyEmail(c: { name: string; inn: string; city: strin
 }
 
 /** Новое КП — без суммы и без файла: до дедлайна они запечатаны. */
-export function staffNewBidEmail(t: TenderInfo, b: { companyName: string; replaced: boolean; count: number }): EmailContent {
+export function staffNewBidEmail(t: TenderInfo, b: { companyName: string; replaced: boolean; count: number; round?: number }): EmailContent {
+  const rebid = b.round === 2 ? " (переторжка)" : "";
   return renderEmail({
-    subject: `${b.replaced ? "Замена КП" : "Новое КП"}: ${t.title}`,
-    title: b.replaced ? "Участник заменил КП" : "Поступило новое КП",
+    subject: `${b.replaced ? "Замена КП" : "Новое КП"}${rebid}: ${t.title}`,
+    title: `${b.replaced ? "Участник заменил КП" : "Поступило новое КП"}${rebid}`,
     blocks: [
       {
         kind: "facts",
@@ -174,7 +175,7 @@ export function staffNewBidEmail(t: TenderInfo, b: { companyName: string; replac
           ["Тендер", t.title],
           ["Объект", t.projectName],
           ["Участник", b.companyName],
-          ["Всего КП", String(b.count)],
+          [b.round === 2 ? "КП на переторжку" : "Всего КП", String(b.count)],
           ...(t.deadlineAt ? ([["Вскрытие КП", formatDateTime(t.deadlineAt)]] as [string, string][]) : []),
         ],
       },
@@ -184,10 +185,10 @@ export function staffNewBidEmail(t: TenderInfo, b: { companyName: string; replac
   });
 }
 
-export function staffBidsOpenedEmail(t: TenderInfo, count: number): EmailContent {
+export function staffBidsOpenedEmail(t: TenderInfo, count: number, rebid = false): EmailContent {
   return renderEmail({
-    subject: `КП вскрыты: ${t.title}`,
-    title: "Приём КП завершён — КП вскрыты",
+    subject: `${rebid ? "Переторжка завершена, КП вскрыты" : "КП вскрыты"}: ${t.title}`,
+    title: rebid ? "Переторжка завершена — КП вскрыты" : "Приём КП завершён — КП вскрыты",
     blocks: [
       {
         kind: "facts",
@@ -195,7 +196,7 @@ export function staffBidsOpenedEmail(t: TenderInfo, count: number): EmailContent
           ["Тендер", t.title],
           ["Объект", t.projectName],
           ["Вид работ", t.workTypeName],
-          ["Подано КП", String(count)],
+          [rebid ? "КП на переторжку" : "Подано КП", String(count)],
         ],
       },
       { kind: "p", text: count > 0 ? "Суммы и файлы КП теперь доступны в карточке тендера." : "По тендеру не подано ни одного КП." },

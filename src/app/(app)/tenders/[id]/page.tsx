@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Archive, CalendarClock, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireUserPage } from "@/lib/access";
-import { closeExpiredTenders, getOwnBid, isWatching } from "@/lib/bids";
+import { closeExpiredTenders, getOwnBid, isRebidInvited, isWatching } from "@/lib/bids";
 import { formatMoney, formatPercent } from "@/lib/bid-rules";
 import { formatSize } from "@/lib/files";
 import { formatDateTime } from "@/lib/time";
@@ -27,7 +27,9 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
     },
   });
   if (!tender) notFound();
-  const [bid, watching] = await Promise.all([getOwnBid(user, tender.id), isWatching(user, tender.id)]);
+  const [bid, watching, invited] = await Promise.all([getOwnBid(user, tender.id), isWatching(user, tender.id), isRebidInvited(user.companyId, tender.id)]);
+  // Переторжка: приглашённая компания видит своё КП раунда 2 (если уже подала).
+  const rebidBid = tender.status === "rebid" && invited ? await getOwnBid(user, tender.id, 2) : null;
 
   const docs = [...tender.documents].sort(
     (a, b) => DOCUMENT_KIND_ORDER.indexOf(a.kind) - DOCUMENT_KIND_ORDER.indexOf(b.kind) || a.uploadedAt.getTime() - b.uploadedAt.getTime(),
@@ -36,7 +38,9 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
   const facts: [string, React.ReactNode][] = [
     ["Объект", <Link key="p" href={`/objects/${tender.project.id}`} className="underline decoration-line underline-offset-4 hover:text-accent">{tender.project.name}</Link>],
     ["Вид работ", tender.workType.name],
-    ["Приём КП до", tender.deadlineAt ? formatDateTime(tender.deadlineAt) : tender.status === "planned" ? tender.plannedStart && `откроется: ${tender.plannedStart}` : null],
+    tender.status === "rebid" && invited && tender.rebidDeadlineAt
+      ? ["Переторжка до", formatDateTime(tender.rebidDeadlineAt)]
+      : ["Приём КП до", tender.deadlineAt ? formatDateTime(tender.deadlineAt) : tender.status === "planned" ? tender.plannedStart && `откроется: ${tender.plannedStart}` : null],
     ["Начало работ", tender.workStart],
     ["Условия оплаты", tender.paymentTerms],
     ["Гарантийное удержание", retention],
@@ -122,6 +126,8 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
             tender={tender}
             isContractor={user.role === "contractor" && !!user.companyId}
             bid={bid ? ownBidView(bid) : null}
+            rebidBid={rebidBid ? ownBidView(rebidBid) : null}
+            invited={invited}
             watching={watching}
             bomDocId={docs.find((d) => d.kind === "bom_template")?.id ?? null}
           />
@@ -159,16 +165,24 @@ function StatusPanel({
   tender,
   isContractor,
   bid,
+  rebidBid,
+  invited,
   watching,
   bomDocId,
 }: {
-  tender: { id: string; status: string; deadlineAt: Date | null; plannedStart: string | null };
+  tender: { id: string; status: string; deadlineAt: Date | null; rebidDeadlineAt: Date | null; plannedStart: string | null };
   isContractor: boolean;
   bid: OwnBidView | null;
+  rebidBid: OwnBidView | null;
+  invited: boolean;
   watching: boolean;
   bomDocId: string | null;
 }) {
   const box = "rounded-2xl border border-line bg-card p-5";
+  // Переторжка: форма раунда 2 — только приглашённым и до срока. Остальным — «Приём завершён».
+  if (isContractor && invited && tender.status === "rebid" && tender.rebidDeadlineAt && tender.rebidDeadlineAt.getTime() > Date.now()) {
+    return <BidPanel tenderId={tender.id} deadline={formatDateTime(tender.rebidDeadlineAt)} bomDocId={bomDocId} bid={rebidBid} rebid />;
+  }
   const accepting = tender.status === "open" && tender.deadlineAt && tender.deadlineAt.getTime() > Date.now();
   if (accepting && tender.deadlineAt) {
     const deadline = formatDateTime(tender.deadlineAt);
@@ -197,7 +211,7 @@ function StatusPanel({
   return (
     <div className={box}>
       <p className="font-medium">Приём завершён</p>
-      <p className="mt-2 text-sm text-muted">Итоги направлены участникам.</p>
+      <p className="mt-2 text-sm text-muted">{tender.status === "awarded" ? "Итоги направлены участникам." : "Итоги будут направлены участникам."}</p>
       {bid && (
         <p className="mt-3 text-sm">
           Ваше КП подано {bid.replacedAt ?? bid.submittedAt} —{" "}

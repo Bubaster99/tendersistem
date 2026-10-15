@@ -40,6 +40,23 @@ model Company {
   bids         Bid[]
   watches      TenderWatch[]
   subscription Subscription?
+  wonTenders   Tender[]           @relation("TenderWinner")
+  rebidInvites RebidInvite[]
+  notes        CompanyNote[]
+}
+
+// Рейтинг и комментарии снабжения о подрядчике — история взаимодействия.
+model CompanyNote {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  authorId    String?
+  authorEmail String
+  rating      Int? // оценка 1–5, если ставили
+  text        String?
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, createdAt])
 }
 
 model User {
@@ -146,6 +163,12 @@ model Tender {
   publishedAt        DateTime?
   openNoticeAt       DateTime? // рассылка «Открыт приём КП» подписчикам сделана
   bidsOpenedNoticeAt DateTime? // снабжению отправлено «Дедлайн прошёл — КП вскрыты»
+  budget             Decimal?           @db.Decimal(15, 2) // бюджет — вводит снабжение, подрядчики не видят
+  rebidDeadlineAt    DateTime? // переторжка (раунд 2): срок подачи
+  winnerCompanyId    String?
+  winner             Company?           @relation("TenderWinner", fields: [winnerCompanyId], references: [id], onDelete: Restrict)
+  awardedAt          DateTime?
+  rebidInvites       RebidInvite[]
   createdAt          DateTime           @default(now())
   documents          TenderDocument[]
   downloads          DocumentDownload[]
@@ -232,6 +255,17 @@ model TenderWatch {
   createdAt DateTime @default(now())
 
   @@id([companyId, tenderId])
+}
+
+// Приглашённые на переторжку (раунд 2). Подать КП второго раунда могут только они.
+model RebidInvite {
+  tenderId  String
+  tender    Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([tenderId, companyId])
 }
 
 // Подписка на новые тендеры. Пустой список объектов — все объекты.

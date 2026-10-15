@@ -30,7 +30,7 @@ export async function submitBidAction(tenderId: string, fd: FormData): Promise<A
   revalidatePath("/", "layout");
   if ("error" in res) return { error: res.error };
   const companyId = user.companyId!;
-  after(() => notifyBidSubmitted(companyId, tenderId, res.replaced)); // подтверждение + снабжению (без суммы)
+  after(() => notifyBidSubmitted(companyId, tenderId, res.replaced, res.round)); // подтверждение + снабжению (без суммы)
   return { message: res.replaced ? "КП заменено" : "КП принято" };
 }
 

@@ -3,14 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireStaffAction } from "@/lib/access";
+import { requireAdminAction } from "@/lib/access";
 import { checkImage } from "@/lib/files";
 import { bool, file, int, str } from "@/lib/form";
 import { removeFile, saveUpload } from "@/lib/storage";
 import type { ActionResult } from "@/components/ActionForm";
 
 export async function saveProject(id: string | null, fd: FormData): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
 
   const name = str(fd, "name", 200);
   if (!name) return { error: "Укажите название объекта" };
@@ -47,7 +47,7 @@ export async function saveProject(id: string | null, fd: FormData): Promise<Acti
 }
 
 export async function deleteProject(id: string): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
   const project = await prisma.project.findUnique({ where: { id }, include: { _count: { select: { tenders: true } } } });
   if (!project) return { error: "Объект не найден" };
   if (project._count.tenders > 0) {

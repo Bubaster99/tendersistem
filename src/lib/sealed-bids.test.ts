@@ -130,8 +130,8 @@ describe.skipIf(!hasDb)("Сервер и база: запечатанные КП
   });
 
   it("подрядчики А и Б подают КП", async () => {
-    expect(await bids.submitBid(userA, tenderId, input(), xlsx())).toEqual({ ok: true, replaced: false });
-    expect(await bids.submitBid(userB, tenderId, input(9_000_000), xlsx("Бета.xlsx"))).toEqual({ ok: true, replaced: false });
+    expect(await bids.submitBid(userA, tenderId, input(), xlsx())).toEqual({ ok: true, replaced: false, round: 1 });
+    expect(await bids.submitBid(userB, tenderId, input(9_000_000), xlsx("Бета.xlsx"))).toEqual({ ok: true, replaced: false, round: 1 });
   });
 
   it("до дедлайна админ и снабженец получают только количество — без сумм и файлов", async () => {
@@ -143,7 +143,7 @@ describe.skipIf(!hasDb)("Сервер и база: запечатанные КП
       expect(json).not.toContain("9000000");
       expect(json).not.toContain(".xlsx");
     }
-    expect(await prisma.auditLog.count({ where: { action: "bid.view" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: "bid.view", details: { contains: tenderId } } })).toBe(0);
   });
 
   it("до дедлайна API не отдаёт файл КП ни админу, ни снабженцу, ни чужому подрядчику, ни гостю", async () => {
@@ -155,7 +155,7 @@ describe.skipIf(!hasDb)("Сервер и база: запечатанные КП
     expect(await bids.bidFileForDownload(admin, bidA.id)).toBeNull();
     expect(await bids.bidFileForDownload(buyer, bidA.id)).toBeNull();
     // Отказы в журнал «скачивание» не пишутся — скачивания не было.
-    expect(await prisma.auditLog.count({ where: { action: "bid.download" } })).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: "bid.download", details: { contains: tenderId } } })).toBe(0);
   });
 
   it("свой файл подрядчик скачивает всегда (и это пишется в журнал)", async () => {
@@ -185,7 +185,7 @@ describe.skipIf(!hasDb)("Сервер и база: запечатанные КП
 
   it("замена КП: новые поля и файл, прежняя версия — в истории, её файл сохранён", async () => {
     const before = await prisma.bid.findFirstOrThrow({ where: { tenderId, companyId: userA.companyId! } });
-    expect(await bids.submitBid(userA, tenderId, input(11_000_000), xlsx("КП v2.xlsx"))).toEqual({ ok: true, replaced: true });
+    expect(await bids.submitBid(userA, tenderId, input(11_000_000), xlsx("КП v2.xlsx"))).toEqual({ ok: true, replaced: true, round: 1 });
     const after = await prisma.bid.findFirstOrThrow({ where: { id: before.id }, include: { versions: true } });
     expect(Number(after.totalWithVat)).toBe(11_000_000);
     expect(after.fileName).toBe("КП v2.xlsx");

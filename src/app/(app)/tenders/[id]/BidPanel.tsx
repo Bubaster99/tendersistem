@@ -30,11 +30,13 @@ export function BidPanel({
   deadline,
   bomDocId,
   bid,
+  rebid = false,
 }: {
   tenderId: string;
   deadline: string;
   bomDocId: string | null;
   bid: OwnBidView | null;
+  rebid?: boolean; // переторжка (раунд 2)
 }) {
   const [replacing, setReplacing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export function BidPanel({
     return (
       <div className={box}>
         <p className="flex items-center gap-2 font-medium text-open">
-          <CheckCircle2 size={20} strokeWidth={1.75} /> КП принято
+          <CheckCircle2 size={20} strokeWidth={1.75} /> {rebid ? "КП на переторжку принято" : "КП принято"}
         </p>
         {notice && <p className="mt-3 rounded-[10px] bg-open-bg px-4 py-3 text-sm text-open">{notice}</p>}
         <a href={`/api/bids/${bid.id}/file`} className="-mx-2 mt-3 flex items-center gap-3 rounded-[10px] px-2 py-2 hover:bg-bg">
@@ -76,9 +78,14 @@ export function BidPanel({
   return (
     <div className={box}>
       <p className="flex items-center gap-2 font-medium text-open">
-        <CalendarClock size={20} strokeWidth={1.75} /> {bid ? "Замена КП" : "Подать КП"}
+        <CalendarClock size={20} strokeWidth={1.75} /> {bid ? "Замена КП" : rebid ? "Переторжка: подать новое КП" : "Подать КП"}
       </p>
       <p className="mt-1 text-sm">Приём до {deadline}</p>
+      {rebid && !bid && (
+        <p className="mt-3 rounded-[10px] bg-soon-bg px-3 py-2.5 text-sm text-soon">
+          Вас пригласили на переторжку (раунд 2). Можно подать улучшенное КП по тому же шаблону. Если не подадите — в сравнении останется КП первого раунда.
+        </p>
+      )}
 
       <ol className="mt-4 space-y-2 text-sm">
         <Step n={1}>

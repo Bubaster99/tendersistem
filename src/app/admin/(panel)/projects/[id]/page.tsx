@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireStaffPage } from "@/lib/access";
+import { requireAdminPage } from "@/lib/access";
 import { ProjectForm } from "../ProjectForm";
 
 export default async function EditProjectPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaffPage();
+  await requireAdminPage();
   const { id } = await params;
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) notFound();

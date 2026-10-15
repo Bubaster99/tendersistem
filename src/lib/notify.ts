@@ -62,20 +62,20 @@ export async function notifyNewCompany(companyId: string, email: string): Promis
 }
 
 /** КП подано или заменено: подтверждение компании + уведомление ответственному и админам (без суммы). */
-export async function notifyBidSubmitted(companyId: string, tenderId: string, replaced: boolean): Promise<void> {
+export async function notifyBidSubmitted(companyId: string, tenderId: string, replaced: boolean, round: 1 | 2 = 1): Promise<void> {
   const [t, bid, company, count] = await Promise.all([
     tenderInfo(tenderId),
     prisma.bid.findUnique({
-      where: { tenderId_companyId_round: { tenderId, companyId, round: 1 } },
+      where: { tenderId_companyId_round: { tenderId, companyId, round } },
       select: { fileName: true, submittedAt: true, replacedAt: true }, // сумму не запрашиваем
     }),
     prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
-    prisma.bid.count({ where: { tenderId, isWithdrawn: false } }),
+    prisma.bid.count({ where: { tenderId, isWithdrawn: false, round } }),
   ]);
   if (!t || !bid || !company) return;
   const emails = (await companyEmails([companyId])).get(companyId) ?? [];
-  await send(emails, T.bidAcceptedEmail(t, { fileName: bid.fileName, at: bid.replacedAt ?? bid.submittedAt, replaced }));
-  await send(await responsibleEmails(tenderId), T.staffNewBidEmail(t, { companyName: company.name, replaced, count }));
+  await send(emails, T.bidAcceptedEmail(t, { fileName: bid.fileName, at: bid.replacedAt ?? bid.submittedAt, replaced, round }));
+  await send(await responsibleEmails(tenderId), T.staffNewBidEmail(t, { companyName: company.name, replaced, count, round }));
 }
 
 // ---------- По расписанию ----------
@@ -127,20 +127,25 @@ export async function sendTenderOpenedNotices(now: Date = new Date()): Promise<n
   return sent;
 }
 
-/** «Дедлайн прошёл — КП вскрыты»: ответственному и админам, один раз на тендер. */
+/** «Дедлайн прошёл — КП вскрыты»: ответственному и админам, один раз на основной приём и один раз после переторжки. */
 export async function sendBidsOpenedNotices(now: Date = new Date()): Promise<number> {
   await closeExpiredTenders(now);
   const tenders = await prisma.tender.findMany({
-    where: { status: { in: ["closed", "rebid", "awarded"] }, bidsOpenedNoticeAt: null, deadlineAt: { lte: now } },
-    select: { id: true },
+    where: {
+      status: { in: ["closed", "awarded"] }, // во время переторжки КП раунда 2 ещё закрыты
+      bidsOpenedNoticeAt: null,
+      OR: [{ rebidDeadlineAt: null, deadlineAt: { lte: now } }, { rebidDeadlineAt: { lte: now } }],
+    },
+    select: { id: true, rebidDeadlineAt: true },
   });
   let sent = 0;
-  for (const { id } of tenders) {
+  for (const { id, rebidDeadlineAt } of tenders) {
     const claimed = await prisma.tender.updateMany({ where: { id, bidsOpenedNoticeAt: null }, data: { bidsOpenedNoticeAt: now } });
     if (claimed.count !== 1) continue;
-    const [t, count] = await Promise.all([tenderInfo(id), prisma.bid.count({ where: { tenderId: id, isWithdrawn: false } })]);
+    const round = rebidDeadlineAt ? 2 : 1;
+    const [t, count] = await Promise.all([tenderInfo(id), prisma.bid.count({ where: { tenderId: id, isWithdrawn: false, round } })]);
     if (!t) continue;
-    await send(await responsibleEmails(id), T.staffBidsOpenedEmail(t, count));
+    await send(await responsibleEmails(id), T.staffBidsOpenedEmail(t, count, round === 2));
     sent++;
   }
   return sent;

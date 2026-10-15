@@ -7,6 +7,8 @@ import { findCompanyByInn, type CompanyInfo } from "@/lib/dadata";
 import { consumeLoginCode, issueLoginCode, type Fail } from "@/lib/login-flow";
 import { notifyNewCompany } from "@/lib/notify";
 import { createSession } from "@/lib/session";
+import { writeAudit } from "@/lib/audit";
+import { clientIp } from "@/lib/request-ip";
 import { isValidEmail, isValidInn, normalizeEmail, normalizeInn } from "@/lib/validation";
 
 function supportEmail() {
@@ -94,6 +96,7 @@ export async function verifyCode(input: { inn: string; email: string; code: stri
   });
 
   console.log(`[вход] ${email} (ИНН ${inn}) вошёл в ${now.toISOString()}`);
+  await writeAudit(user, "login", "company", company.id, `Вход подрядчика, ИНН ${inn}`, await clientIp());
   await createSession(user.id);
   // Первый вход — мини-анкета (её можно пропустить).
   redirect(company.onboardedAt ? "/objects" : "/welcome");

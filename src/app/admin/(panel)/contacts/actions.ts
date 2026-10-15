@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireStaffAction } from "@/lib/access";
+import { requireAdminAction } from "@/lib/access";
 import { checkImage } from "@/lib/files";
 import { bool, file, int, str } from "@/lib/form";
 import { removeFile, saveUpload } from "@/lib/storage";
@@ -11,7 +11,7 @@ import { isValidEmail, normalizeEmail } from "@/lib/validation";
 import type { ActionResult } from "@/components/ActionForm";
 
 export async function saveContact(id: string | null, fd: FormData): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
 
   const name = str(fd, "name", 200);
   if (!name) return { error: "Укажите ФИО" };
@@ -51,7 +51,7 @@ export async function saveContact(id: string | null, fd: FormData): Promise<Acti
 }
 
 export async function deleteContact(id: string): Promise<ActionResult> {
-  await requireStaffAction();
+  await requireAdminAction();
   const contact = await prisma.contact.findUnique({ where: { id } });
   if (!contact) return { error: "Контакт не найден" };
   // Тендеры и виды работ, где он был ответственным, останутся без контакта.
