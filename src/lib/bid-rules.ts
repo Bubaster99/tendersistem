@@ -27,6 +27,29 @@ export function submitBlocker(tender: { status: string; deadlineAt: Date | null 
   return null;
 }
 
+/** Срок раунда: 1 — основной приём, 2 — переторжка. По нему КП раунда запечатаны. */
+export function roundDeadline(tender: { deadlineAt: Date | null; rebidDeadlineAt?: Date | null }, round: number): Date | null {
+  return round >= 2 ? (tender.rebidDeadlineAt ?? null) : tender.deadlineAt;
+}
+
+/**
+ * В какой раунд компания может подать КП прямо сейчас:
+ * открытый приём — раунд 1; переторжка — раунд 2, только приглашённым и только до срока переторжки.
+ */
+export function submitRound(
+  tender: { status: string; deadlineAt: Date | null; rebidDeadlineAt: Date | null },
+  now: Date,
+  invited: boolean,
+): { round: 1 | 2 } | { error: string } {
+  if (tender.status === "rebid") {
+    if (!invited) return { error: "Приём КП завершён. Переторжка — только для приглашённых участников" };
+    if (!tender.rebidDeadlineAt || now.getTime() >= tender.rebidDeadlineAt.getTime()) return { error: "Переторжка завершена — срок подачи истёк" };
+    return { round: 2 };
+  }
+  const blocked = submitBlocker(tender, now);
+  return blocked ? { error: blocked } : { round: 1 };
+}
+
 export const BID_MAX_BYTES = 20 * 1024 * 1024;
 
 export type BidInput = { totalWithVat: number; durationDays: number; advancePercent: number; comment: string | null };
@@ -65,6 +88,20 @@ export function checkBidFile(name: string, size: number, head?: Uint8Array): str
 /** Статус КП в «Моих заявках» (этап 3): до дедлайна — «Подано», после — «Вскрыто». */
 export function bidStage(deadlineAt: Date | null, now: Date): "Подано" | "Вскрыто" {
   return isSealed(deadlineAt, now) ? "Подано" : "Вскрыто";
+}
+
+export type ContractorStage = "Подано" | "Вскрыто" | "Переторжка" | "Ваше КП выбрано" | "Выбран другой участник";
+
+/** Статус заявки в «Моих заявках»: Подано → Вскрыто → Переторжка → Итог. */
+export function contractorStage(
+  t: { status: string; deadlineAt: Date | null; winnerCompanyId: string | null },
+  companyId: string,
+  invited: boolean,
+  now: Date,
+): ContractorStage {
+  if (t.status === "awarded" && t.winnerCompanyId) return t.winnerCompanyId === companyId ? "Ваше КП выбрано" : "Выбран другой участник";
+  if (t.status === "rebid" && invited) return "Переторжка";
+  return bidStage(t.deadlineAt, now);
 }
 
 const money = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
