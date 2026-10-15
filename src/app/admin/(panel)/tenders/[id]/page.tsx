@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Download, ExternalLink, FileSpreadsheet, FileText, Lock, Trash2 } from "lucide-react";
+import { Download, ExternalLink, FileText, Lock, Trash2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireStaffPage } from "@/lib/access";
-import { closeExpiredTenders, staffTenderBids, type StaffBids } from "@/lib/bids";
+import { closeExpiredTenders, staffTenderBids, type StaffBid, type StaffBids } from "@/lib/bids";
 import { formatMoney, formatPercent } from "@/lib/bid-rules";
 import { clientIp } from "@/lib/request-ip";
 import { formatDateTime } from "@/lib/time";
@@ -12,7 +12,9 @@ import { AdminStatusBadge } from "@/components/StatusBadge";
 import { btnDanger, btnPrimary, cardCls, inputCls } from "@/components/ui";
 import { formatSize } from "@/lib/files";
 import { DOCUMENT_KIND_LABEL, DOCUMENT_KIND_ORDER, isTenderVisible } from "@/lib/tenders";
+import { budgetDeltaPct, compareBids, DEFAULT_WINNER_DOCUMENTS, innCheckUrl } from "@/lib/compare";
 import { TenderForm } from "../TenderForm";
+import { Comparison, type BidCell, type ComparisonView } from "./Comparison";
 import { tenderFormOptions } from "../options";
 import { deleteDocument, deleteTender, uploadDocument } from "../actions";
 
@@ -30,7 +32,12 @@ export default async function EditTenderPage({
   const [tender, options] = await Promise.all([
     prisma.tender.findUnique({
       where: { id },
-      include: { documents: true, project: { select: { isPublished: true } }, _count: { select: { downloads: true } } },
+      include: {
+        documents: true,
+        project: { select: { isPublished: true } },
+        winner: { select: { name: true } },
+        _count: { select: { downloads: true, rebidInvites: true } },
+      },
     }),
     tenderFormOptions(),
   ]);
@@ -67,7 +74,12 @@ export default async function EditTenderPage({
       </p>
       {created && <p className="mt-4 rounded-[10px] bg-open-bg px-4 py-3 text-sm text-open">Тендер сохранён. Теперь загрузите документы.</p>}
 
-      {bids && <BidsSection bids={bids} />}
+      {bids &&
+        (bids.sealed ? (
+          <SealedBids count={bids.count} deadlineAt={bids.deadlineAt} />
+        ) : (
+          <Comparison v={comparisonView(tender, bids)} />
+        ))}
 
       <div className="mt-6">
         <TenderForm tender={tender} options={options} />
@@ -127,48 +139,78 @@ export default async function EditTenderPage({
   );
 }
 
-/** КП участников. Сравнительная таблица, переторжка и выбор победителя — этап 5. */
-function BidsSection({ bids }: { bids: StaffBids }) {
-  if (bids.sealed) {
-    return (
-      <div className={`${cardCls} mt-6 flex gap-3 p-5`}>
-        <Lock size={20} strokeWidth={1.75} className="mt-0.5 shrink-0 text-muted" />
-        <div>
-          <p className="font-medium">Подано КП: {bids.count}</p>
-          <p className="mt-1 text-sm text-muted">
-            Суммы и файлы КП закрыты до окончания приёма{bids.deadlineAt ? ` — ${formatDateTime(bids.deadlineAt)}` : ""}. Их не видит никто, включая администратора.
-          </p>
-        </div>
-      </div>
-    );
-  }
+/** До дедлайна — только количество КП. */
+function SealedBids({ count, deadlineAt }: { count: number; deadlineAt: Date | null }) {
   return (
-    <section className="mt-6">
-      <h2 className="font-display text-lg">
-        КП участников <span className="text-muted">{bids.count}</span>
-      </h2>
-      <p className="mt-1 text-sm text-muted">Приём завершён, КП вскрыты. Каждый просмотр и скачивание записываются в журнал.</p>
-      <div className={`${cardCls} mt-3 divide-y divide-line`}>
-        {bids.bids.length === 0 && <p className="p-4 text-muted">КП не подавали.</p>}
-        {bids.bids.map((b) => (
-          <div key={b.id} className="p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="font-medium">
-                {b.company.name} <span className="text-sm font-normal text-muted">ИНН {b.company.inn}</span>
-              </p>
-              <p className="font-display text-lg">{formatMoney(b.totalWithVat)}</p>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              Срок: {b.durationDays} дн. · Аванс: {formatPercent(b.advancePercent)} · Подано: {formatDateTime(b.replacedAt ?? b.submittedAt)}
-              {b.versions > 0 && ` · замен: ${b.versions}`}
-            </p>
-            {b.comment && <p className="mt-2 whitespace-pre-line text-sm">{b.comment}</p>}
-            <a href={`/api/bids/${b.id}/file`} className="mt-2 inline-flex items-center gap-2 text-sm text-accent underline underline-offset-2">
-              <FileSpreadsheet size={16} strokeWidth={1.75} /> {b.fileName} · {formatSize(b.fileSize)}
-            </a>
-          </div>
-        ))}
+    <div className={`${cardCls} mt-6 flex gap-3 p-5`}>
+      <Lock size={20} strokeWidth={1.75} className="mt-0.5 shrink-0 text-muted" />
+      <div>
+        <p className="font-medium">Подано КП: {count}</p>
+        <p className="mt-1 text-sm text-muted">
+          Суммы и файлы КП закрыты до окончания приёма{deadlineAt ? ` — ${formatDateTime(deadlineAt)}` : ""}. Их не видит никто, включая администратора.
+        </p>
       </div>
-    </section>
+    </div>
   );
+}
+
+const pct = (v: number) => `${v > 0 ? "+" : ""}${String(v).replace(".", ",")}%`;
+
+/** Данные для сравнительной таблицы (считаются на сервере, в браузер уходят готовые строки). */
+function comparisonView(
+  tender: {
+    id: string;
+    status: string;
+    budget: { toString(): string } | null;
+    rebidDeadlineAt: Date | null;
+    winner: { name: string } | null;
+    _count: { rebidInvites: number };
+  },
+  bids: Extract<StaffBids, { sealed: false }>,
+): ComparisonView {
+  const round2 = bids.round2 && !bids.round2.sealed ? bids.round2.bids : [];
+  const cmp = compareBids(bids.bids, round2);
+  const budget = tender.budget === null ? null : Number(String(tender.budget));
+  const cell = (b: StaffBid | null): BidCell | null =>
+    b && {
+      id: b.id,
+      total: formatMoney(b.totalWithVat),
+      fileName: b.fileName,
+      fileSize: formatSize(b.fileSize),
+      submittedAt: formatDateTime(b.replacedAt ?? b.submittedAt),
+      versions: b.versions,
+    };
+  const bestVsBudget = cmp.best !== null ? budgetDeltaPct(cmp.best, budget) : null;
+  return {
+    tenderId: tender.id,
+    status: tender.status,
+    rows: cmp.rows.map((r, i) => ({
+      companyId: r.companyId,
+      name: r.final.company.name,
+      inn: r.final.company.inn,
+      innUrl: innCheckUrl(r.final.company.inn),
+      workedWithUs: r.final.company.workedWithUs,
+      rating: r.final.company.rating,
+      invited: r.final.company.invited,
+      r1: cell(r.r1),
+      r2: cell(r.r2),
+      total: formatMoney(r.total),
+      deviation: i === 0 ? "лучшая" : pct(r.deviationPct),
+      durationDays: r.final.durationDays,
+      advance: formatPercent(r.final.advancePercent),
+      comment: r.final.comment,
+    })),
+    best: cmp.best !== null ? formatMoney(cmp.best) : null,
+    budget: budget !== null ? formatMoney(budget) : null,
+    budgetRaw: budget !== null ? String(budget).replace(".", ",") : "",
+    bestVsBudget: bestVsBudget !== null ? `${pct(bestVsBudget)} ${bestVsBudget <= 0 ? "(в бюджете)" : "(выше бюджета)"}` : null,
+    spread: cmp.spreadPct !== null ? pct(cmp.spreadPct) : null,
+    canRebid: tender.status === "closed" && !tender.rebidDeadlineAt && cmp.rows.length > 0,
+    canChooseWinner: tender.status === "closed" && cmp.rows.length > 0,
+    rebid: bids.round2
+      ? { deadline: formatDateTime(bids.round2.deadlineAt!), invited: tender._count.rebidInvites, sealed: bids.round2.sealed, count: bids.round2.count }
+      : null,
+    winnerName: tender.winner?.name ?? null,
+    defaultDocuments: DEFAULT_WINNER_DOCUMENTS.join("\n"),
+  };
 }

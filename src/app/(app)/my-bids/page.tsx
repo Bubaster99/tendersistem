@@ -2,21 +2,35 @@ import Link from "next/link";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { requireUserPage } from "@/lib/access";
 import { closeExpiredTenders, listOwnBids } from "@/lib/bids";
-import { bidStage, formatMoney, formatPercent } from "@/lib/bid-rules";
+import { contractorStage, formatMoney, formatPercent, type ContractorStage } from "@/lib/bid-rules";
 import { formatSize } from "@/lib/files";
 import { formatDateTime } from "@/lib/time";
 
 export const metadata = { title: "Мои заявки — Тендерная площадка" };
 
-const STAGE_STYLE = {
+const STAGE_STYLE: Record<ContractorStage, string> = {
   Подано: "bg-open-bg text-open",
   Вскрыто: "bg-closed-bg text-closed",
-} as const;
+  Переторжка: "bg-soon-bg text-soon",
+  "Ваше КП выбрано": "bg-accent text-white",
+  "Выбран другой участник": "bg-closed-bg text-closed",
+};
+
+const STAGE_NOTE: Record<Exclude<ContractorStage, "Подано">, string> = {
+  Вскрыто: "Приём завершён, КП переданы снабжению",
+  Переторжка: "Вас пригласили на переторжку — можно подать улучшенное КП",
+  "Ваше КП выбрано": "Поздравляем! Письмо с дальнейшими шагами отправлено на вашу почту",
+  "Выбран другой участник": "Спасибо за участие",
+};
 
 export default async function MyBidsPage() {
   const user = await requireUserPage();
   await closeExpiredTenders();
-  const bids = await listOwnBids(user);
+  // По каждому тендеру — последнее КП: переторжка (раунд 2), если подано, иначе основное.
+  const all = await listOwnBids(user);
+  const latest = new Map<string, (typeof all)[number]>();
+  for (const b of all) if (!latest.has(b.tenderId) || b.round > latest.get(b.tenderId)!.round) latest.set(b.tenderId, b);
+  const bids = all.filter((b) => latest.get(b.tenderId) === b);
   const now = new Date();
 
   return (
@@ -40,15 +54,18 @@ export default async function MyBidsPage() {
       ) : (
         <div className="mt-6 space-y-3">
           {bids.map((b) => {
-            const stage = bidStage(b.tender.deadlineAt, now);
+            const stage = contractorStage(b.tender, user.companyId ?? "", b.tender.rebidInvites.length > 0, now);
+            const sealUntil = b.round === 2 ? b.tender.rebidDeadlineAt : b.tender.deadlineAt;
             return (
               <div key={b.id} className="rounded-2xl border border-line bg-card p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STAGE_STYLE[stage]}`}>{stage}</span>
                   <span className="text-sm text-muted">
                     {stage === "Подано"
-                      ? b.tender.deadlineAt && `Вскрытие после ${formatDateTime(b.tender.deadlineAt, now)}`
-                      : "Приём завершён, КП переданы снабжению"}
+                      ? sealUntil && `Вскрытие после ${formatDateTime(sealUntil, now)}`
+                      : stage === "Переторжка" && b.round === 2 && sealUntil
+                        ? `КП переторжки подано, вскрытие после ${formatDateTime(sealUntil, now)}`
+                        : STAGE_NOTE[stage]}
                   </span>
                 </div>
                 <Link href={`/tenders/${b.tender.id}`} className="mt-2 block font-medium leading-snug hover:text-accent">
