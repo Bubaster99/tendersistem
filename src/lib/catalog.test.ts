@@ -40,6 +40,11 @@ describe("Файлы", () => {
     expect(checkImage("фасад.JPG", 1000)).toBeNull();
     expect(checkImage("фасад.svg", 1000)).not.toBeNull();
     expect(checkImage("фасад.png", 11 * 1024 * 1024)).not.toBeNull();
+    // Подмена расширения: по первым байтам видно, что это не картинка.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0, 0, 0, 0, 0]);
+    const html = new TextEncoder().encode("<html><script>");
+    expect(checkImage("фасад.png", 1000, png)).toBeNull();
+    expect(checkImage("фасад.png", 1000, html)).not.toBeNull();
   });
 
   it("имена в архиве не повторяются и не содержат путей", () => {

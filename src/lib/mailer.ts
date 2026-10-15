@@ -38,15 +38,19 @@ async function savePreview(mail: Mail): Promise<string | null> {
 }
 
 /**
- * Отправка письма. В режиме разработки (или если SMTP не настроен) письмо
- * не отправляется, а печатается в консоль и сохраняется в mail-preview/.
+ * Отправка письма. В режиме разработки письмо не отправляется, а печатается в консоль
+ * и сохраняется в mail-preview/. На рабочем сервере — только через SMTP из .env.
  */
 export async function sendMail(mail: Mail): Promise<void> {
   if (process.env.NODE_ENV === "test") {
     testOutbox.push(mail);
     return;
   }
-  if (process.env.NODE_ENV !== "production" || !process.env.SMTP_HOST) {
+  if (process.env.NODE_ENV === "production" && !process.env.SMTP_HOST) {
+    // На рабочем сервере коды входа нельзя печатать в журнал — без почты письмо просто не уходит.
+    throw new Error("Почта не настроена: заполните SMTP_* в .env");
+  }
+  if (process.env.NODE_ENV !== "production") {
     const file = await savePreview(mail);
     console.log(
       `\n===== ПИСЬМО (не отправлено, режим разработки) =====\nКому: ${mail.to}\nТема: ${mail.subject}\n\n${mail.text}\n${file ? `\nКак выглядит: ${file}\n` : ""}====================================================\n`,
