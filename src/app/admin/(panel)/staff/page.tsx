@@ -55,7 +55,7 @@ export default async function StaffPage() {
 
       <ActionForm action={addStaffAction} className={`${cardCls} mt-6 space-y-4 p-5`} resetOnSuccess>
         <p className="font-medium">Добавить сотрудника</p>
-        <div className="grid gap-4 sm:grid-cols-[1fr_1fr_200px]">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Email *">
             <input name="email" type="email" required className={inputCls} placeholder="name@company.ru" />
           </Field>

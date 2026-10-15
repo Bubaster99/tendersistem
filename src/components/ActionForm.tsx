@@ -48,7 +48,9 @@ export function ActionForm({
 
   return (
     <form ref={ref} onSubmit={onSubmit} className={className}>
-      <fieldset disabled={pending} className="contents">
+      {/* fieldset прозрачен для раскладки (contents), поэтому отступы между строками (space-y-*) повторяем на нём —
+          иначе они не доходят до полей и кнопки «прилипают» друг к другу. */}
+      <fieldset disabled={pending} className={`contents ${className?.match(/(?:^|\s)(space-y-\S+)/)?.[1] ?? ""}`}>
         {children}
       </fieldset>
       {error && (
