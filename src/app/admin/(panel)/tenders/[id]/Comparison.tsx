@@ -142,7 +142,7 @@ export function Comparison({ v }: { v: ComparisonView }) {
                       </a>
                     </td>
                     {hasRound2 && <td className="px-3 py-3 align-top whitespace-nowrap">{r.r1?.total ?? "—"}</td>}
-                    {hasRound2 && <td className="px-3 py-3 align-top whitespace-nowrap">{r.r2?.total ?? (r.invited ? "не подано" : "—")}</td>}
+                    {hasRound2 && <td className="px-3 py-3 align-top whitespace-nowrap">{r.r2?.total ?? (!r.invited ? "—" : v.rebid?.sealed ? "запечатано" : "не подано")}</td>}
                     <td className="px-3 py-3 align-top font-medium whitespace-nowrap">{r.total}</td>
                     <td className={`px-3 py-3 align-top whitespace-nowrap ${i === 0 ? "text-open" : ""}`}>{r.deviation}</td>
                     <td className="px-3 py-3 align-top whitespace-nowrap">{r.durationDays} дн.</td>

@@ -51,7 +51,7 @@ export default async function EditTenderPage({
   const visible = isTenderVisible(tender);
 
   return (
-    <div className="max-w-[860px]">
+    <div className="max-w-[1200px]">
       <Link href="/admin/tenders" className="text-sm text-muted hover:text-ink">
         ← Все тендеры
       </Link>
@@ -81,6 +81,7 @@ export default async function EditTenderPage({
           <Comparison v={comparisonView(tender, bids)} />
         ))}
 
+      <div className="max-w-[860px]">
       <div className="mt-6">
         <TenderForm tender={tender} options={options} />
       </div>
@@ -135,6 +136,7 @@ export default async function EditTenderPage({
           <button className={btnDanger}>Удалить черновик</button>
         </ActionForm>
       )}
+      </div>
     </div>
   );
 }
@@ -202,7 +204,7 @@ function comparisonView(
     })),
     best: cmp.best !== null ? formatMoney(cmp.best) : null,
     budget: budget !== null ? formatMoney(budget) : null,
-    budgetRaw: budget !== null ? String(budget).replace(".", ",") : "",
+    budgetRaw: budget !== null ? new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(budget).replace(/\u00a0|\u202f/g, " ") : "",
     bestVsBudget: bestVsBudget !== null ? `${pct(bestVsBudget)} ${bestVsBudget <= 0 ? "(в бюджете)" : "(выше бюджета)"}` : null,
     spread: cmp.spreadPct !== null ? pct(cmp.spreadPct) : null,
     canRebid: tender.status === "closed" && !tender.rebidDeadlineAt && cmp.rows.length > 0,

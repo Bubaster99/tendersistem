@@ -38,7 +38,9 @@ export default async function TenderPage({ params }: { params: Promise<{ id: str
   const facts: [string, React.ReactNode][] = [
     ["Объект", <Link key="p" href={`/objects/${tender.project.id}`} className="underline decoration-line underline-offset-4 hover:text-accent">{tender.project.name}</Link>],
     ["Вид работ", tender.workType.name],
-    ["Приём КП до", tender.deadlineAt ? formatDateTime(tender.deadlineAt) : tender.status === "planned" ? tender.plannedStart && `откроется: ${tender.plannedStart}` : null],
+    tender.status === "rebid" && invited && tender.rebidDeadlineAt
+      ? ["Переторжка до", formatDateTime(tender.rebidDeadlineAt)]
+      : ["Приём КП до", tender.deadlineAt ? formatDateTime(tender.deadlineAt) : tender.status === "planned" ? tender.plannedStart && `откроется: ${tender.plannedStart}` : null],
     ["Начало работ", tender.workStart],
     ["Условия оплаты", tender.paymentTerms],
     ["Гарантийное удержание", retention],
