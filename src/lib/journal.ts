@@ -17,6 +17,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "staff.role": "Изменена роль сотрудника",
   "staff.remove": "Удалён сотрудник",
   "company.update": "Изменён подрядчик",
+  "company.note": "Оценка или комментарий о подрядчике",
 };
 
 export const ACTION_GROUPS: { key: string; label: string; actions: string[] }[] = [
@@ -24,7 +25,7 @@ export const ACTION_GROUPS: { key: string; label: string; actions: string[] }[] 
   { key: "bids", label: "Подача КП", actions: ["bid.submit", "bid.replace"] },
   { key: "opened", label: "Просмотр и скачивание КП", actions: ["bid.view", "bid.download", "bid.export"] },
   { key: "tender", label: "Статусы и победители", actions: ["tender.status", "tender.winner"] },
-  { key: "admin", label: "Сотрудники и подрядчики", actions: ["staff.add", "staff.role", "staff.remove", "company.update"] },
+  { key: "admin", label: "Сотрудники и подрядчики", actions: ["staff.add", "staff.role", "staff.remove", "company.update", "company.note"] },
 ];
 
 export const JOURNAL_PAGE_SIZE = 100;

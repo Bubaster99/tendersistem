@@ -42,6 +42,21 @@ model Company {
   subscription Subscription?
   wonTenders   Tender[]           @relation("TenderWinner")
   rebidInvites RebidInvite[]
+  notes        CompanyNote[]
+}
+
+// Рейтинг и комментарии снабжения о подрядчике — история взаимодействия.
+model CompanyNote {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  authorId    String?
+  authorEmail String
+  rating      Int? // оценка 1–5, если ставили
+  text        String?
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, createdAt])
 }
 
 model User {

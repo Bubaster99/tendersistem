@@ -1,5 +1,6 @@
 // Права снабженца (решение владельца): только тендеры и просмотр подрядчиков.
-// Объекты, контакты, виды работ, сотрудники, статус и рейтинг подрядчика, выбор победителя — только администратор.
+// Объекты, контакты, виды работ, сотрудники, статус подрядчика, выбор победителя — только администратор.
+// Оценку и комментарий о подрядчике оставляет любой сотрудник.
 // Проверяем сами серверные действия: даже вызванные напрямую, они отказывают снабженцу.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,7 +37,7 @@ describe.skipIf(!hasDb)("Права снабженца и администрат
     ["удалить вид работ", () => workTypes.deleteWorkType("x")],
     ["добавить сотрудника", () => staff.addStaffAction(fd({ email: "x@roles.ru", role: "admin" }))],
     ["удалить сотрудника", () => staff.removeStaffAction("x")],
-    ["статус и рейтинг подрядчика", () => companyActions.updateCompanyAction("x", fd({ status: "blocked" }))],
+    ["статус подрядчика", () => companyActions.updateCompanyAction("x", fd({ status: "blocked" }))],
     ["выбрать победителя", () => award.chooseWinnerAction("x", fd({ winner: "x" }))],
   ];
 
@@ -52,6 +53,13 @@ describe.skipIf(!hasDb)("Права снабженца и администрат
       await expect(call()).rejects.toThrow("Нет доступа");
     });
   }
+
+  it("оценку и комментарий о подрядчике снабженец оставить может, подрядчик — нет", async () => {
+    as("contractor");
+    await expect(companyActions.addCompanyNoteAction("x", fd({ rating: "5" }))).rejects.toThrow("Нет доступа");
+    as("buyer");
+    await expect(companyActions.addCompanyNoteAction("нет-такого", fd({ rating: "5" }))).resolves.toEqual({ error: "Компания не найдена" });
+  });
 
   it("администратору проверка прав не мешает (дальше — обычные проверки данных)", async () => {
     as("admin");

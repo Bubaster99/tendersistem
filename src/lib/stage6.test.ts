@@ -71,14 +71,28 @@ describe.skipIf(!hasDb)("Сотрудники, реестр, журнал (на�
     for (const data of [JSON.stringify(byInn), JSON.stringify(card)]) expect(data).not.toContain("8765432");
   });
 
-  it("статус и рейтинг: только администратор, рейтинг 1–5; изменение — в журнал", async () => {
-    expect(await companies.updateCompany(contractor, companyId, { status: "checked", rating: 5 })).toHaveProperty("error");
-    expect(await companies.updateCompany(buyer, companyId, { status: "checked", rating: 4 })).toHaveProperty("error"); // снабженцу — нельзя
-    expect(await companies.updateCompany(admin, companyId, { status: "checked", rating: 6 })).toHaveProperty("error");
-    expect(await companies.updateCompany(admin, companyId, { status: "unknown", rating: 3 })).toHaveProperty("error");
-    expect(await companies.updateCompany(admin, companyId, { status: "checked", rating: 4 })).toEqual({ ok: true });
-    const c = await prisma.company.findUniqueOrThrow({ where: { id: companyId } });
-    expect([c.status, c.rating]).toEqual(["checked", 4]);
+  it("статус меняет только администратор; изменение — в журнал", async () => {
+    expect(await companies.updateCompanyStatus(contractor, companyId, "checked")).toHaveProperty("error");
+    expect(await companies.updateCompanyStatus(buyer, companyId, "checked")).toHaveProperty("error"); // снабженцу — нельзя
+    expect(await companies.updateCompanyStatus(admin, companyId, "unknown")).toHaveProperty("error");
+    expect(await companies.updateCompanyStatus(admin, companyId, "checked")).toEqual({ ok: true });
+    expect((await prisma.company.findUniqueOrThrow({ where: { id: companyId } })).status).toBe("checked");
+  });
+
+  it("оценку и комментарий ставит любой сотрудник; история хранится, последняя оценка — рейтинг", async () => {
+    expect(await companies.addCompanyNote(contractor, companyId, { rating: 5, text: "Отлично" })).toHaveProperty("error");
+    expect(await companies.addCompanyNote(buyer, companyId, { rating: 6, text: null })).toHaveProperty("error");
+    expect(await companies.addCompanyNote(buyer, companyId, { rating: null, text: "   " })).toHaveProperty("error");
+    expect(await companies.addCompanyNote(buyer, companyId, { rating: 3, text: "Сорвали срок на 2 недели" })).toEqual({ ok: true });
+    expect(await companies.addCompanyNote(admin, companyId, { rating: null, text: "Обещали усилить бригаду" })).toEqual({ ok: true });
+    expect(await companies.addCompanyNote(buyer, companyId, { rating: 4, text: "Догнали график" })).toEqual({ ok: true });
+    expect((await prisma.company.findUniqueOrThrow({ where: { id: companyId } })).rating).toBe(4);
+    const card = await companies.getCompany(companyId);
+    expect(card?.notes.map((n) => [n.rating, n.text, n.authorEmail])).toEqual([
+      [4, "Догнали график", buyer.email],
+      [null, "Обещали усилить бригаду", admin.email],
+      [3, "Сорвали срок на 2 недели", buyer.email],
+    ]);
     expect((await companies.listCompanies({ status: "checked", rating: "4", q: uniq })).map((x) => x.id)).toEqual([companyId]);
     expect(await companies.listCompanies({ rating: "5", q: uniq })).toEqual([]);
   });

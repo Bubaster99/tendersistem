@@ -5,6 +5,7 @@ import ExcelJS from "exceljs";
 import type { CompanyStatus, Prisma, UserRole } from "@prisma/client";
 import { prisma } from "./db";
 import { writeAudit } from "./audit";
+import { isStaffRole } from "./access-rules";
 import { STATUS_LABEL_ADMIN } from "./tenders";
 import { formatDay } from "./time";
 
@@ -82,6 +83,7 @@ export async function getCompany(id: string) {
     include: {
       users: { select: { email: true, createdAt: true, consentPdAt: true } },
       subscription: true,
+      notes: { orderBy: { createdAt: "desc" }, take: 200 },
       bids: {
         where: { isWithdrawn: false },
         orderBy: { submittedAt: "desc" },
@@ -113,23 +115,43 @@ export async function getCompany(id: string) {
   };
 }
 
-/** Статус и рейтинг ставит снабжение. Заблокированная компания не может войти. */
-export async function updateCompany(
+/** Статус меняет только администратор. «Заблокирован» — компания не может войти. */
+export async function updateCompanyStatus(
   actor: { id: string; email: string; role: UserRole },
   id: string,
-  input: { status: string; rating: number | null },
+  status: string,
 ): Promise<{ error: string } | { ok: true }> {
-  if (actor.role !== "admin") return { error: "Статус и рейтинг меняет только администратор" };
-  if (!(STATUSES as string[]).includes(input.status)) return { error: "Выберите статус" };
-  if (input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) return { error: "Рейтинг — от 1 до 5" };
-  const before = await prisma.company.findUnique({ where: { id }, select: { name: true, status: true, rating: true } });
+  if (actor.role !== "admin") return { error: "Статус меняет только администратор" };
+  if (!(STATUSES as string[]).includes(status)) return { error: "Выберите статус" };
+  const before = await prisma.company.findUnique({ where: { id }, select: { name: true, status: true } });
   if (!before) return { error: "Компания не найдена" };
-  await prisma.company.update({ where: { id }, data: { status: input.status as CompanyStatus, rating: input.rating } });
-  const changes = [
-    before.status !== input.status && `статус: ${COMPANY_STATUS_LABEL[before.status]} → ${COMPANY_STATUS_LABEL[input.status as CompanyStatus]}`,
-    before.rating !== input.rating && `рейтинг: ${before.rating ?? "—"} → ${input.rating ?? "—"}`,
-  ].filter(Boolean);
-  if (changes.length) await writeAudit(actor, "company.update", "company", id, `${before.name}: ${changes.join(", ")}`);
+  if (before.status === status) return { ok: true };
+  await prisma.company.update({ where: { id }, data: { status: status as CompanyStatus } });
+  await writeAudit(actor, "company.update", "company", id, `${before.name}: статус ${COMPANY_STATUS_LABEL[before.status]} → ${COMPANY_STATUS_LABEL[status as CompanyStatus]}`);
+  return { ok: true };
+}
+
+/**
+ * Оценка и/или комментарий о подрядчике — оставляет любой сотрудник (снабженец или админ).
+ * Оценка становится текущим рейтингом компании; все записи хранятся как история.
+ */
+export async function addCompanyNote(
+  actor: { id: string; email: string; role: UserRole },
+  companyId: string,
+  input: { rating: number | null; text: string | null },
+): Promise<{ error: string } | { ok: true }> {
+  if (!isStaffRole(actor.role)) return { error: "Нет доступа" };
+  const text = input.text?.trim() || null;
+  if (input.rating !== null && (!Number.isInteger(input.rating) || input.rating < 1 || input.rating > 5)) return { error: "Оценка — от 1 до 5" };
+  if (input.rating === null && !text) return { error: "Поставьте оценку или напишите комментарий" };
+  if (text && text.length > 2000) return { error: "Комментарий — не длиннее 2000 символов" };
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+  if (!company) return { error: "Компания не найдена" };
+  await prisma.$transaction([
+    prisma.companyNote.create({ data: { companyId, authorId: actor.id, authorEmail: actor.email, rating: input.rating, text } }),
+    ...(input.rating !== null ? [prisma.company.update({ where: { id: companyId }, data: { rating: input.rating } })] : []),
+  ]);
+  await writeAudit(actor, "company.note", "company", companyId, `${company.name}: ${input.rating !== null ? `оценка ${input.rating}` : "комментарий"}`);
   return { ok: true };
 }
 

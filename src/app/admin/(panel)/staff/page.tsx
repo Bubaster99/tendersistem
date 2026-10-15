@@ -36,7 +36,7 @@ export default async function StaffPage() {
             ) : (
               <>
                 <ActionForm action={setStaffRoleAction.bind(null, s.id)} className="flex gap-2">
-                  <select name="role" defaultValue={s.role} className={`${inputCls} h-10 w-auto`} aria-label="Роль">
+                  <select name="role" defaultValue={s.role} className={`${inputCls.replace("w-full", "w-auto")} h-10`} aria-label="Роль">
                     <option value="buyer">{STAFF_ROLE_LABEL.buyer}</option>
                     <option value="admin">{STAFF_ROLE_LABEL.admin}</option>
                   </select>

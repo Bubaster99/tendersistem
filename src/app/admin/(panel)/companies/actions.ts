@@ -1,14 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireAdminAction } from "@/lib/access";
-import { updateCompany } from "@/lib/companies";
+import { requireAdminAction, requireStaffAction } from "@/lib/access";
+import { addCompanyNote, updateCompanyStatus } from "@/lib/companies";
+import { str } from "@/lib/form";
 import type { ActionResult } from "@/components/ActionForm";
 
+/** Статус подрядчика — только администратор. */
 export async function updateCompanyAction(id: string, fd: FormData): Promise<ActionResult> {
   const user = await requireAdminAction();
+  const res = await updateCompanyStatus(user, id, String(fd.get("status") ?? ""));
+  if ("error" in res) return { error: res.error };
+  revalidatePath("/admin/companies", "layout");
+  return { message: "Статус сохранён" };
+}
+
+/** Оценка и комментарий — любой сотрудник. */
+export async function addCompanyNoteAction(id: string, fd: FormData): Promise<ActionResult> {
+  const user = await requireStaffAction();
   const ratingRaw = String(fd.get("rating") ?? "");
-  const res = await updateCompany(user, id, { status: String(fd.get("status") ?? ""), rating: ratingRaw ? Number(ratingRaw) : null });
+  const res = await addCompanyNote(user, id, { rating: ratingRaw ? Number(ratingRaw) : null, text: str(fd, "text", 2001) });
   if ("error" in res) return { error: res.error };
   revalidatePath("/admin/companies", "layout");
   return { message: "Сохранено" };

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Star } from "lucide-react";
 import { requireStaffPage } from "@/lib/access";
 import { COMPANY_STATUS_LABEL, getCompany } from "@/lib/companies";
 import { innCheckUrl } from "@/lib/compare";
-import { formatDay } from "@/lib/time";
+import { formatDateTime, formatDay } from "@/lib/time";
 import { ActionForm, Field } from "@/components/ActionForm";
-import { btnPrimary, cardCls, inputCls } from "@/components/ui";
-import { updateCompanyAction } from "../actions";
+import { btnPrimary, btnSecondary, cardCls, inputCls, textareaCls } from "@/components/ui";
+import { addCompanyNoteAction, updateCompanyAction } from "../actions";
 
 /** Карточка подрядчика: реквизиты, анкета, история участия, статус и рейтинг. */
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,36 +39,37 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         Проверить по ИНН <ExternalLink size={14} strokeWidth={1.75} />
       </a>
 
-      {isAdmin ? (
-        <ActionForm action={updateCompanyAction.bind(null, c.id)} className={`${cardCls} mt-5 flex flex-wrap items-end gap-4 p-5`}>
-          <Field label="Статус">
-            <select name="status" defaultValue={c.status} className={`${inputCls} w-auto`}>
+      <div className={`${cardCls} mt-5 flex flex-wrap items-center gap-x-6 gap-y-3 p-5`}>
+        <p>
+          <span className="text-muted">Рейтинг: </span>
+          {c.rating ? (
+            <b className="inline-flex items-center gap-1">
+              <Star size={16} strokeWidth={2} /> {c.rating} из 5
+            </b>
+          ) : (
+            "нет"
+          )}
+        </p>
+        {isAdmin ? (
+          <ActionForm action={updateCompanyAction.bind(null, c.id)} className="flex flex-wrap items-center gap-2">
+            <span className="text-muted">Статус:</span>
+            <select name="status" defaultValue={c.status} className={`${inputCls.replace("w-full", "w-auto")} h-10`} aria-label="Статус">
               {Object.entries(COMPANY_STATUS_LABEL).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Рейтинг (после работ)">
-            <select name="rating" defaultValue={c.rating ?? ""} className={`${inputCls} w-auto`}>
-              <option value="">Нет</option>
-              {[1, 2, 3, 4, 5].map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <button className={btnPrimary}>Сохранить</button>
-          <p className="w-full text-sm text-muted">«Проверен» — в сравнении КП компания помечается «работал с нами». «Заблокирован» — компания не сможет войти на площадку.</p>
-        </ActionForm>
-      ) : (
-        <p className={`${cardCls} mt-5 p-5 text-sm`}>
-          Статус: <b>{COMPANY_STATUS_LABEL[c.status]}</b> · Рейтинг: <b>{c.rating ?? "нет"}</b>
-          <span className="mt-1 block text-muted">Статус и рейтинг меняет администратор.</span>
-        </p>
-      )}
+            <button className={`${btnSecondary} h-10 px-3`}>Сохранить</button>
+          </ActionForm>
+        ) : (
+          <p>
+            <span className="text-muted">Статус: </span>
+            <b>{COMPANY_STATUS_LABEL[c.status]}</b> <span className="text-sm text-muted">(меняет администратор)</span>
+          </p>
+        )}
+        <p className="w-full text-sm text-muted">«Проверен» — в сравнении КП компания помечается «работал с нами». «Заблокирован» — компания не сможет войти на площадку.</p>
+      </div>
 
       <dl className={`${cardCls} mt-5 grid gap-x-6 gap-y-2 p-5 text-sm sm:grid-cols-[220px_1fr]`}>
         {facts.map(([k, v]) => (
@@ -101,6 +102,42 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             </ul>
           )}
         </div>
+      </div>
+
+      <h2 className="mt-8 font-display text-lg">Оценки и комментарии</h2>
+      <p className="mt-1 text-sm text-muted">Как подрядчик отработал на объекте: оценка от 1 до 5 и пояснение. Последняя оценка — текущий рейтинг компании.</p>
+      <ActionForm action={addCompanyNoteAction.bind(null, c.id)} className={`${cardCls} mt-3 space-y-3 p-5`} resetOnSuccess>
+        <Field label="Оценка (необязательно)">
+          <select name="rating" defaultValue="" className={inputCls.replace("w-full", "w-auto")}>
+            <option value="">Без оценки — только комментарий</option>
+            {[5, 4, 3, 2, 1].map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Комментарий">
+          <textarea name="text" maxLength={2000} rows={3} className={textareaCls} placeholder="Например: сорвали срок монтажа на 2 недели, качество хорошее" />
+        </Field>
+        <button className={btnPrimary}>Добавить</button>
+      </ActionForm>
+      <div className={`${cardCls} mt-3 divide-y divide-line`}>
+        {c.notes.length === 0 && <p className="p-5 text-muted">Пока нет ни одной записи.</p>}
+        {c.notes.map((n) => (
+          <div key={n.id} className="p-4 text-sm">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
+              {n.rating !== null && (
+                <b className="inline-flex items-center gap-1 text-ink">
+                  <Star size={14} strokeWidth={2} /> {n.rating}
+                </b>
+              )}
+              <span>{formatDateTime(n.createdAt)}</span>
+              <span className="break-all">{n.authorEmail}</span>
+            </p>
+            {n.text && <p className="mt-1 whitespace-pre-line">{n.text}</p>}
+          </div>
+        ))}
       </div>
 
       <h2 className="mt-8 font-display text-lg">История участия</h2>
