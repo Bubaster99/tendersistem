@@ -46,7 +46,7 @@ export function AdminLoginForm() {
     return (
       <form onSubmit={onVerify} className="space-y-4 rounded-2xl border border-line bg-card p-5">
         <div>
-          <p className="text-sm text-muted">Код отправлен на</p>
+          <p className="text-sm text-muted">Если этот адрес есть среди сотрудников, код придёт на</p>
           <p className="font-medium break-all">{email}</p>
         </div>
         <label className="block">

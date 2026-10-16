@@ -1,6 +1,7 @@
 // Начальные данные. Запускается при каждом старте (npx prisma db seed), повторный запуск ничего не дублирует:
 // - справочник видов работ (раздел 3 SPEC.md) и первый администратор — всегда;
-// - тестовые объекты, тендеры и контакты — только если в базе ещё нет ни одного объекта.
+// - тестовые объекты, тендеры и контакты — только если в базе ещё нет ни одного объекта
+//   и только в режиме разработки (на рабочем сервере — нет, если явно не задано SEED_TEST_DATA=1).
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
@@ -222,6 +223,8 @@ async function main() {
   await seedWorkTypes();
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) console.log(await ensureAdmin(prisma, adminEmail));
+  // На рабочем сервере тестовые тендеры и контакты не нужны: подрядчики увидели бы выдуманные данные.
+  if (process.env.NODE_ENV === "production" && process.env.SEED_TEST_DATA !== "1") return;
   if (await seedTestData()) console.log("Тестовые данные созданы: 2 объекта, 10 тендеров, 5 контактов");
 }
 

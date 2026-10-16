@@ -16,7 +16,7 @@ export async function saveProject(id: string | null, fd: FormData): Promise<Acti
   if (!name) return { error: "Укажите название объекта" };
   const cover = file(fd, "coverImage");
   if (cover) {
-    const bad = checkImage(cover.name, cover.size);
+    const bad = checkImage(cover.name, cover.size, new Uint8Array(await cover.slice(0, 12).arrayBuffer()));
     if (bad) return { error: bad };
   }
 

@@ -20,7 +20,7 @@ export async function saveContact(id: string | null, fd: FormData): Promise<Acti
   if (email && !isValidEmail(email)) return { error: "Проверьте email" };
   const photo = file(fd, "photo");
   if (photo) {
-    const bad = checkImage(photo.name, photo.size);
+    const bad = checkImage(photo.name, photo.size, new Uint8Array(await photo.slice(0, 12).arrayBuffer()));
     if (bad) return { error: bad };
   }
 

@@ -7,9 +7,8 @@ import { consumeLoginCode, issueLoginCode, type Fail } from "@/lib/login-flow";
 import { createSession, destroySession } from "@/lib/session";
 import { writeAudit } from "@/lib/audit";
 import { clientIp } from "@/lib/request-ip";
+import { allow, HOUR, TOO_MANY } from "@/lib/rate-limit";
 import { isValidEmail, normalizeEmail } from "@/lib/validation";
-
-const NOT_STAFF = "Этот email не зарегистрирован как сотрудник снабжения";
 
 async function findStaff(email: string) {
   const user = await prisma.user.findUnique({ where: { email } });
@@ -20,8 +19,11 @@ async function findStaff(email: string) {
 export async function requestStaffCode(rawEmail: string): Promise<{ ok: true } | Fail> {
   const email = normalizeEmail(rawEmail);
   if (!isValidEmail(email)) return { ok: false, error: "Проверьте email — похоже, в нём ошибка" };
-  if (!(await findStaff(email))) return { ok: false, error: NOT_STAFF };
-  return issueLoginCode(email);
+  if (!allow(`staff-code:${await clientIp()}`, 20, HOUR)) return { ok: false, error: TOO_MANY };
+  // Не подсказываем постороннему, чей email есть среди сотрудников: ответ одинаковый, письмо — только сотруднику.
+  if (!(await findStaff(email))) return { ok: true };
+  const res = await issueLoginCode(email);
+  return res.ok ? res : { ok: true };
 }
 
 export async function verifyStaffCode(input: { email: string; code: string }): Promise<Fail> {
@@ -31,7 +33,7 @@ export async function verifyStaffCode(input: { email: string; code: string }): P
   if (wrong) return wrong;
 
   const user = await findStaff(email);
-  if (!user) return { ok: false, error: NOT_STAFF };
+  if (!user) return { ok: false, error: "Неверный код" };
 
   console.log(`[вход в админку] ${email} в ${new Date().toISOString()}`);
   await writeAudit(user, "login.staff", "user", user.id, "Вход в админку", await clientIp());

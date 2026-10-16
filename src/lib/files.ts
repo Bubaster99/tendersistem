@@ -24,12 +24,21 @@ export function checkDocument(name: string, size: number, kind: string): string 
   return null;
 }
 
-export function checkImage(name: string, size: number): string | null {
+/** head — первые байты файла: по ним проверяем, что это действительно картинка (а не файл с подменённым расширением). */
+export function checkImage(name: string, size: number, head?: Uint8Array): string | null {
   const ext = fileExtension(name);
   if (size <= 0) return "Файл пустой";
   if (size > IMAGE_MAX_BYTES) return "Картинка больше 10 МБ";
   if (!(IMAGE_EXTENSIONS as readonly string[]).includes(ext)) return "Картинка — только jpg, png или webp";
+  if (head && !looksLikeImage(head)) return "Файл не похож на картинку jpg, png или webp";
   return null;
+}
+
+function looksLikeImage(h: Uint8Array): boolean {
+  const jpg = h[0] === 0xff && h[1] === 0xd8 && h[2] === 0xff;
+  const png = h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47;
+  const webp = h[0] === 0x52 && h[1] === 0x49 && h[2] === 0x46 && h[3] === 0x46 && h[8] === 0x57 && h[9] === 0x45 && h[10] === 0x42 && h[11] === 0x50;
+  return jpg || png || webp;
 }
 
 const MIME: Record<string, string> = {

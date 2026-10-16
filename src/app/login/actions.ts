@@ -9,6 +9,7 @@ import { notifyNewCompany } from "@/lib/notify";
 import { createSession } from "@/lib/session";
 import { writeAudit } from "@/lib/audit";
 import { clientIp } from "@/lib/request-ip";
+import { allow, HOUR, TOO_MANY } from "@/lib/rate-limit";
 import { isValidEmail, isValidInn, normalizeEmail, normalizeInn } from "@/lib/validation";
 
 function supportEmail() {
@@ -19,6 +20,8 @@ function supportEmail() {
 export async function lookupInn(rawInn: string): Promise<{ ok: true; company: CompanyInfo } | Fail> {
   const inn = normalizeInn(rawInn);
   if (!isValidInn(inn)) return { ok: false, error: "ИНН должен состоять из 10 или 12 цифр" };
+  // Поиск по ИНН доступен без входа — ограничиваем, чтобы не израсходовали лимит DaData.
+  if (!allow(`inn:${await clientIp()}`, 60, HOUR)) return { ok: false, error: TOO_MANY };
 
   const existing = await prisma.company.findUnique({ where: { inn } });
   if (existing) {
@@ -64,6 +67,8 @@ export async function requestCode(input: { inn: string; email: string; consent: 
   const conflict = await checkPair(inn, email);
   if (conflict) return conflict;
 
+  // Лимит на адрес: не больше 20 писем с кодом в час с одного IP (помимо лимита на один email).
+  if (!allow(`code:${await clientIp()}`, 20, HOUR)) return { ok: false, error: TOO_MANY };
   return issueLoginCode(email);
 }
 
