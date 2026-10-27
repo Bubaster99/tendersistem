@@ -39,6 +39,7 @@
 - **Проверить дедлайн без ожидания (для Claude):** `docker compose exec db psql -U tender -c "update \"Tender\" set \"deadlineAt\"=now()-interval '1 minute' where title like 'Навесной%'"` — при следующем открытии страницы тендер сам станет «Приём закрыт».
 - **Закончить переторжку без ожидания (для Claude):** `docker compose exec db psql -U tender -c "update \"Tender\" set \"rebidDeadlineAt\"=now()-interval '1 minute' where status='rebid'"` — в течение минуты тендер станет «Приём закрыт», снабжению уйдёт «Переторжка завершена».
 - **Рабочий сервер:** пошаговая инструкция — `DEPLOY.md`. Запуск: `docker compose -f docker-compose.prod.yml up -d --build` (настройки — `.env` по образцу `.env.production.example`). Сайт не стартует со слабым `AUTH_SECRET`, без почты, без ключа DaData или без https в `APP_URL`. Бэкап вручную: `docker compose -f docker-compose.prod.yml exec backup sh /backup.sh`; восстановить: `sh deploy/restore.sh <папка>`.
+- **Сервер с уже работающим Traefik:** вместо Caddy — `docker compose -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build`; настройки `TRAEFIK_*` и порядок — в DEPLOY.md, раздел «Traefik».
 - **Сборка рабочей версии (для Claude):** только `next build --webpack` — Turbopack падает на русских буквах в сообщениях.
 - **Проверка типов:** `docker compose exec app npm run lint`.
 - **Новая миграция базы (для Claude):** поменять `prisma/schema.prisma`, затем `docker compose exec app npx prisma migrate dev --name <название>`.

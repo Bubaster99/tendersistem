@@ -1,0 +1,57 @@
+# Вариант для сервера, где УЖЕ работает Traefik (вместо нашего Caddy).
+# Подключается поверх основного файла:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+#
+# Что делает:
+#  - Caddy не запускается (порты 80/443 остаются у вашего Traefik);
+#  - сайт (app) подключается к сети Traefik и получает метки маршрутизации;
+#  - база (db) и бэкапы в сеть Traefik НЕ подключаются — остаются во внутренней сети проекта.
+#
+# Настройки — в .env (значения по умолчанию в скобках):
+#  TRAEFIK_NETWORK       — внешняя docker-сеть, в которой работает Traefik (traefik)
+#  TRAEFIK_ENTRYPOINT    — entrypoint HTTPS в Traefik (websecure)
+#  TRAEFIK_CERTRESOLVER  — certresolver для сертификата (letsencrypt);
+#                          если сертификаты выдаются иначе (файлом, wildcard) — см. DEPLOY.md, раздел про Traefik
+#  TRAEFIK_ROUTER        — имя роутера/сервиса, если «tender» уже занято (tender)
+
+services:
+  caddy:
+    # Отключён: в этом варианте входящий трафик принимает ваш Traefik.
+    profiles: ["caddy"]
+
+  app:
+    networks:
+      - default
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.services.${TRAEFIK_ROUTER:-tender}.loadbalancer.server.port=3000
+
+      # Основной маршрут: весь сайт. Тело запроса — до 25 МБ (КП — до 20 МБ).
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.tls=true
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.tls.certresolver=${TRAEFIK_CERTRESOLVER-letsencrypt}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.service=${TRAEFIK_ROUTER:-tender}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}.middlewares=${TRAEFIK_ROUTER:-tender}-headers,${TRAEFIK_ROUTER:-tender}-body
+
+      # Админка: загрузка документов тендера — до 200 МБ.
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.rule=Host(`${DOMAIN}`) && PathPrefix(`/admin`)
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.priority=100
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.tls=true
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.tls.certresolver=${TRAEFIK_CERTRESOLVER-letsencrypt}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.service=${TRAEFIK_ROUTER:-tender}
+      - traefik.http.routers.${TRAEFIK_ROUTER:-tender}-admin.middlewares=${TRAEFIK_ROUTER:-tender}-headers,${TRAEFIK_ROUTER:-tender}-body-admin
+
+      # Те же меры, что были в Caddy: HSTS и ограничение размера запросов.
+      - traefik.http.middlewares.${TRAEFIK_ROUTER:-tender}-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.${TRAEFIK_ROUTER:-tender}-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.${TRAEFIK_ROUTER:-tender}-body.buffering.maxRequestBodyBytes=26214400
+      - traefik.http.middlewares.${TRAEFIK_ROUTER:-tender}-body-admin.buffering.maxRequestBodyBytes=220200960
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}
