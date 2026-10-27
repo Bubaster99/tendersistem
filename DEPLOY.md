@@ -113,6 +113,40 @@ docker compose -f docker-compose.prod.yml logs app --tail 30
 
 ---
 
+## Если на сервере уже работает Traefik (для системного администратора)
+
+Вместо нашего Caddy входящий трафик принимает ваш Traefik. Используется дополнительный файл `docker-compose.traefik.yml` поверх основного:
+- контейнер `caddy` не запускается (порты 80/443 остаются у Traefik);
+- во внешнюю сеть Traefik подключается **только** контейнер `app`; `db` и `backup` остаются во внутренней сети проекта;
+- маршрут — `Host(DOMAIN)`, HTTPS через ваш entrypoint и certresolver;
+- те же меры, что были в Caddy: HSTS (`stsSeconds=31536000`, includeSubdomains) и ограничение тела запроса через `buffering` — 25 МБ для сайта, 210 МБ для `/admin` (загрузка документов тендера).
+
+**1. Узнайте у своего Traefik:**
+- имя docker-сети, в которой он работает (`docker network ls`), — по умолчанию ожидается `traefik`;
+- имя entrypoint для HTTPS — по умолчанию `websecure`;
+- имя certresolver — по умолчанию `letsencrypt`. Если сертификаты выдаются иначе (файловым провайдером, wildcard), оставьте значение **пустым**: `TRAEFIK_CERTRESOLVER=` — тогда Traefik возьмёт сертификат из своей конфигурации;
+- что в Traefik включён docker-провайдер с `exposedByDefault=false` (контейнер явно помечен `traefik.enable=true`);
+- редирект http → https настраивается на стороне вашего Traefik (entrypoint `web`), площадка его не задаёт.
+
+**2. Допишите в `.env`** (если значения отличаются от умолчаний):
+```
+TRAEFIK_NETWORK=traefik
+TRAEFIK_ENTRYPOINT=websecure
+TRAEFIK_CERTRESOLVER=letsencrypt
+TRAEFIK_ROUTER=tender
+```
+`TRAEFIK_ROUTER` — имя роутера/сервиса/middleware в Traefik; поменяйте, если `tender` уже занято.
+
+**3. Запуск и обновление** — везде вместо `-f docker-compose.prod.yml` указывайте оба файла:
+```
+cd /opt/tender && docker compose -f docker-compose.prod.yml -f docker-compose.traefik.yml up -d --build
+```
+Остальные команды (журнал, бэкап, восстановление) — так же, с двумя `-f`. В `deploy/restore.sh` используется только основной файл — это нормально: сеть Traefik для восстановления не нужна.
+
+**4. IP посетителей в журнале действий** берётся из `X-Forwarded-For`, который выставляет Traefik. По умолчанию Traefik не доверяет этому заголовку от клиентов (`forwardedHeaders.insecure=false`) — не включайте `insecure` и `trustedIPs` на внешнем entrypoint, иначе IP в журнале можно будет подделать.
+
+**5. Совместимость.** Проверено с Traefik **v3.7** и Docker 29. Старые версии Traefik (например, v3.3) не работают с Docker 29 через docker-провайдер (`client version 1.24 is too old`) — это ограничение самого Traefik, нужно его обновить.
+
 ## Бэкапы
 
 - Каждую ночь в **03:00 по Москве** — база и все файлы в папку `/opt/tender/backups/ДАТА_ВРЕМЯ/`, хранятся 14 дней (`BACKUP_KEEP_DAYS`). Если заполнены `BACKUP_S3_*` — копия в облако.
